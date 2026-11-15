@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --canvas: #FFFBF5;
+    --card: #FFFFFF;
+    --card2: #FBF6EC;
+    --card-neo: #FFF9E6;
+    --ink: #1C1C1C;
+    --muted: rgba(28, 28, 28, 0.72);
+    --amber: #F2A93B;
+    --amber-tint: #FFF1D9;
+    --rose: #E1467A;
+    --rose-tint: rgba(225, 70, 122, 0.12);
+    --badge-yellow: #FFE082;
+    --border-neo: #1C1C1C;
+  }
+
+  body {
+    background-color: var(--canvas);
+    color: var(--ink);
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+  }
+
+  h1, h2, h3, h4, .font-head {
+    font-family: "Bricolage Grotesque", "Inter", system-ui, sans-serif;
+  }
+
+  .font-accent {
+    font-family: "Fraunces", Georgia, serif;
+  }
+}
+
+/* Neo-brutalist utility classes matching Campus Kit */
+.nb-border {
+  border: 2px solid #1C1C1C;
+}
+
+.nb-border-3 {
+  border: 2.5px solid #1C1C1C;
+}
+
+.nb-shadow-sm {
+  box-shadow: 2px 2px 0px #1C1C1C;
+}
+
+.nb-shadow {
+  box-shadow: 3.5px 3.5px 0px #1C1C1C;
+}
+
+.nb-shadow-lg {
+  box-shadow: 5px 5px 0px #1C1C1C;
+}
+
+.nb-shadow-xl {
+  box-shadow: 7px 7px 0px #1C1C1C;
+}
+
+.nb-hover-card {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.nb-hover-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px #1C1C1C;
+}
+
+.nb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  border: 2px solid #1C1C1C;
+  box-shadow: 2.5px 2.5px 0px #1C1C1C;
+  transition: all 0.12s ease;
+  user-select: none;
+}
+
+.nb-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0px #1C1C1C;
+}
+
+.nb-btn:active {
+  transform: translate(1.5px, 1.5px);
+  box-shadow: 1px 1px 0px #1C1C1C;
+}
+
+.nb-sticker {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: "Bricolage Grotesque", "Inter", sans-serif;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 4px 10px;
+  background-color: var(--badge-yellow);
+  color: #1C1C1C;
+  border: 2px solid #1C1C1C;
+  border-radius: 8px;
+  box-shadow: 2px 2px 0px #1C1C1C;
+  transform: rotate(-2deg);
+}
+
+.nb-sticker.rose {
+  background-color: #E1467A;
+  color: #FFFFFF;
+}
+
+.nb-sticker.amber {
+  background-color: #F2A93B;
+  color: #1C1C1C;
+}
+
+.highlight-box {
+  background-color: #F2A93B;
+  border: 2px solid #1C1C1C;
+  border-radius: 10px;
+  box-shadow: 2px 2px 0px #1C1C1C;
+  padding: 0 10px;
+  display: inline-block;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #FFFBF5;
+}
+::-webkit-scrollbar-thumb {
+  background: #E5D5B8;
+  border-radius: 4px;
+  border: 1px solid #1C1C1C;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #F2A93B;
+}
+
+/* Continuous Horizontal Sliding Marquee */
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 22s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
