@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import confetti from 'canvas-confetti';
+import { supabase, profileToStudent } from '../lib/supabase';
 import {
   Product,
   Student,
@@ -96,6 +97,7 @@ interface AppContextType {
   switchUser: (studentId: string) => void;
   registerUser: (userData: Partial<Student>) => Student;
   updateProfile: (updates: Partial<Student>) => void;
+  logoutUser: () => Promise<void>;
   toggleAdminMode: () => void;
 
   // Reset
@@ -257,6 +259,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Fallback
     }
   };
+
+  // Supabase Auth listener & active session synchronization
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single()
+          .then(({ data: profile }) => {
+            if (profile) {
+              if (profile.is_suspended) {
+                supabase.auth.signOut();
+                pushToast(
+                  'Your account has been suspended. Please contact the administrator at gjr19atwork@gmail.com',
+                  'error'
+                );
+              } else {
+                setCurrentUserState(profileToStudent(profile));
+              }
+            }
+          });
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (profile) {
+          if (profile.is_suspended) {
+            await supabase.auth.signOut();
+            pushToast(
+              'Your account has been suspended. Please contact the administrator at gjr19atwork@gmail.com',
+              'error'
+            );
+          } else {
+            setCurrentUserState(profileToStudent(profile));
+          }
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUserState(INITIAL_STUDENTS[0]);
+        setIsAdminMode(false);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Products Handlers
   const addProduct = (
@@ -887,6 +946,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pushToast('Profile updated successfully!', 'success');
   };
 
+  const logoutUser = async () => {
+    await supabase.auth.signOut();
+    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+    setCurrentUserState(INITIAL_STUDENTS[0]);
+    setIsAdminMode(false);
+    pushToast('Signed out of BMSIT Marketplace.', 'info');
+  };
+
   const toggleAdminMode = () => {
     if (!isAdminMode) {
       // Find admin user or elevate
@@ -980,6 +1047,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         switchUser,
         registerUser,
         updateProfile,
+        logoutUser,
         toggleAdminMode,
         resetDemoData,
       }}

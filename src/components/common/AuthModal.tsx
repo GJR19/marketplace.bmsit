@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   GraduationCap,
@@ -12,9 +12,12 @@ import {
   ShieldCheck,
   Sparkles,
   KeyRound,
+  RotateCw,
+  Loader2,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { parseUSN, BMSIT_BRANCH_MAP, USNParseResult } from '../../utils/usnParser';
+import { supabase, profileToStudent } from '../../lib/supabase';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -27,9 +30,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   initialMode = 'signin',
 }) => {
-  const { students, currentUser, switchUser, registerUser, pushToast } = useApp();
+  const { currentUser, setCurrentUser, registerUser, pushToast, triggerConfetti } = useApp();
 
   const [mode, setMode] = useState<'signin' | 'register' | 'verify' | 'forgot'>(initialMode);
+  const [loading, setLoading] = useState(false);
 
   // Sign In state
   const [signInEmail, setSignInEmail] = useState('');
@@ -46,14 +50,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Real-time USN parsed info
   const [usnResult, setUsnResult] = useState<USNParseResult | null>(null);
 
-  // Simulated OTP verification state
+  // OTP verification state
+  const [pendingEmail, setPendingEmail] = useState('');
   const [enteredOtp, setEnteredOtp] = useState('');
-  const [generatedOtp, setGeneratedOtp] = useState('842019');
-  const [registeredDataPending, setRegisteredDataPending] = useState<any>(null);
+  const [pendingData, setPendingData] = useState<any>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   // Forgot password state
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSubmitted, setForgotSubmitted] = useState(false);
+
+  // Timer countdown for Resend OTP
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => setResendCooldown((prev) => prev - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
 
   if (!isOpen) return null;
 
@@ -72,8 +85,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  // Handle Registration Submit
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  // Handle Registration Submit with Supabase Auth
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // 1. Validate full name
@@ -85,7 +98,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     // 2. Validate college email ending with @bmsit.in
     const trimmedEmail = email.trim().toLowerCase();
     if (!trimmedEmail.endsWith('@bmsit.in')) {
-      pushToast('College email must end with @bmsit.in (BMSIT domain required).', 'error');
+      pushToast('College email must strictly end with @bmsit.in.', 'error');
       return;
     }
 
@@ -112,52 +125,240 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    // Store pending student and trigger simulated OTP verification
-    const pending = {
-      name: fullName.trim(),
-      email: trimmedEmail,
+    const userData = {
+      full_name: fullName.trim(),
       usn: usnInput.trim().toUpperCase(),
       branch: finalBranch,
-      admissionYear: usnResult.admissionYearFull || 2024,
-      currentYear: usnResult.currentYear || '1st Year (Fresher)',
+      admission_year: usnResult.admissionYearFull || 2024,
+      current_year: usnResult.currentYear || '1st Year (Fresher)',
     };
 
-    setRegisteredDataPending(pending);
-    setGeneratedOtp(Math.floor(100000 + Math.random() * 900000).toString());
-    setMode('verify');
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: trimmedEmail,
+        password,
+        options: {
+          data: userData,
+        },
+      });
+
+      if (error) {
+        if (error.message.includes('suspended')) {
+          pushToast(
+            'An account associated with this email has been suspended. Please contact the administrator at gjr19atwork@gmail.com',
+            'error'
+          );
+        } else if (error.message.includes('already registered')) {
+          pushToast('This email is already registered. Please sign in instead.', 'info');
+          setSignInEmail(trimmedEmail);
+          setMode('signin');
+        } else {
+          pushToast(error.message, 'error');
+        }
+        setLoading(false);
+        return;
+      }
+
+      setPendingEmail(trimmedEmail);
+      setPendingData({
+        name: fullName.trim(),
+        email: trimmedEmail,
+        usn: usnInput.trim().toUpperCase(),
+        branch: finalBranch,
+        admissionYear: usnResult.admissionYearFull || 2024,
+        currentYear: usnResult.currentYear || '1st Year (Fresher)',
+      });
+      setResendCooldown(60);
+      setMode('verify');
+      pushToast(`Verification code sent to ${trimmedEmail}!`, 'success');
+    } catch (err: any) {
+      pushToast(err.message || 'Registration failed. Please try again.', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Handle Simulated Verification
-  const handleVerifyOtp = (e: React.FormEvent) => {
+  // Handle Real 6-Digit OTP Verification
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (enteredOtp.trim() !== generatedOtp) {
-      pushToast('Invalid demo OTP. Use the demo auto-fill button.', 'error');
+    const cleanOtp = enteredOtp.trim();
+    if (cleanOtp.length !== 6) {
+      pushToast('Please enter the full 6-digit verification code.', 'warning');
       return;
     }
 
-    // Complete registration
-    registerUser(registeredDataPending);
-    onClose();
+    setLoading(true);
+    try {
+      // 1. Verify OTP with Supabase
+      let verifyRes = await supabase.auth.verifyOtp({
+        email: pendingEmail,
+        token: cleanOtp,
+        type: 'signup',
+      });
+
+      // Fallback for email type if signup type is exhausted
+      if (verifyRes.error) {
+        verifyRes = await supabase.auth.verifyOtp({
+          email: pendingEmail,
+          token: cleanOtp,
+          type: 'email',
+        });
+      }
+
+      if (verifyRes.error) {
+        pushToast(verifyRes.error.message || 'Invalid or expired code. Please try again.', 'error');
+        setLoading(false);
+        return;
+      }
+
+      const sessionUser = verifyRes.data.user;
+      if (sessionUser) {
+        // Fetch student profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', sessionUser.id)
+          .single();
+
+        if (profile) {
+          setCurrentUser(profileToStudent(profile));
+        } else if (pendingData) {
+          registerUser({
+            ...pendingData,
+            id: sessionUser.id,
+          });
+        }
+      }
+
+      triggerConfetti();
+      pushToast('Email verified successfully! Welcome to BMSIT Marketplace.', 'success');
+      onClose();
+    } catch (err: any) {
+      pushToast(err.message || 'Verification failed. Please try again.', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Handle Standard Sign-in
-  const handleSignInSubmit = (e: React.FormEvent) => {
+  // Handle Resend OTP
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || !pendingEmail) return;
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: pendingEmail,
+      });
+
+      if (error) {
+        pushToast(error.message, 'error');
+      } else {
+        setResendCooldown(60);
+        pushToast(`New verification code sent to ${pendingEmail}!`, 'success');
+      }
+    } catch (err: any) {
+      pushToast(err.message || 'Failed to resend code.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Sign-in with Supabase
+  const handleSignInSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!signInEmail.trim()) {
+    const trimmedEmail = signInEmail.trim().toLowerCase();
+
+    if (!trimmedEmail) {
       pushToast('Please enter your @bmsit.in email.', 'warning');
       return;
     }
+    if (!trimmedEmail.endsWith('@bmsit.in')) {
+      pushToast('Sign in requires your official @bmsit.in student email.', 'error');
+      return;
+    }
+    if (!signInPassword) {
+      pushToast('Please enter your password.', 'warning');
+      return;
+    }
 
-    const found = students.find(
-      (s) => s.email.toLowerCase() === signInEmail.trim().toLowerCase()
-    );
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: trimmedEmail,
+        password: signInPassword,
+      });
 
-    if (found) {
-      switchUser(found.id);
-      pushToast(`Signed in as ${found.name}`, 'success');
-      onClose();
-    } else {
-      pushToast('No demo student found with this email. Use quick switch accounts below.', 'warning');
+      if (error) {
+        if (error.message.toLowerCase().includes('email not confirmed')) {
+          setPendingEmail(trimmedEmail);
+          setMode('verify');
+          pushToast('Please enter the 6-digit verification code sent to your email.', 'info');
+        } else {
+          pushToast(error.message, 'error');
+        }
+        setLoading(false);
+        return;
+      }
+
+      if (data.user) {
+        // Check for suspension
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profile?.is_suspended) {
+          await supabase.auth.signOut();
+          pushToast(
+            'Your account has been suspended. Please contact the administrator at gjr19atwork@gmail.com',
+            'error'
+          );
+          setLoading(false);
+          return;
+        }
+
+        if (profile) {
+          setCurrentUser(profileToStudent(profile));
+        }
+
+        pushToast(`Welcome back, ${profile?.full_name || 'Student'}!`, 'success');
+        onClose();
+      }
+    } catch (err: any) {
+      pushToast(err.message || 'Sign in failed.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Password Reset Request
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = forgotEmail.trim().toLowerCase();
+    if (!trimmed.endsWith('@bmsit.in')) {
+      pushToast('Please enter a valid @bmsit.in student email.', 'warning');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
+        redirectTo: `${window.location.origin}/`,
+      });
+
+      if (error) {
+        pushToast(error.message, 'error');
+      } else {
+        setForgotSubmitted(true);
+        pushToast('Password reset link sent to your email!', 'success');
+      }
+    } catch (err: any) {
+      pushToast(err.message || 'Failed to request reset.', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -182,7 +383,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 marketplace.bmsit
               </span>
               <span className="nb-sticker text-[10px] py-0.5 px-2 bg-[#FFE082]">
-                DEMO AUTH
+                VERIFIED AUTH
               </span>
             </div>
             <p className="text-xs text-[#1C1C1C]/70">
@@ -199,8 +400,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               onClick={() => setMode('signin')}
               className={`py-2 text-xs font-bold rounded-lg transition ${
                 mode === 'signin'
-                  ? 'bg-[#F2A93B] text-[#1C1C1C] border border-[#1C1C1C] shadow-[1px_1px_0px_#1C1C1C]'
-                  : 'text-[#1C1C1C]/70 hover:text-[#1C1C1C]'
+                  ? 'bg-[#1C1C1C] text-[#FFFBEA]'
+                  : 'text-[#1C1C1C] hover:bg-[#F2A93B]/20'
               }`}
             >
               Sign In
@@ -210,11 +411,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               onClick={() => setMode('register')}
               className={`py-2 text-xs font-bold rounded-lg transition ${
                 mode === 'register'
-                  ? 'bg-[#F2A93B] text-[#1C1C1C] border border-[#1C1C1C] shadow-[1px_1px_0px_#1C1C1C]'
-                  : 'text-[#1C1C1C]/70 hover:text-[#1C1C1C]'
+                  ? 'bg-[#1C1C1C] text-[#FFFBEA]'
+                  : 'text-[#1C1C1C] hover:bg-[#F2A93B]/20'
               }`}
             >
-              Create Account
+              Register (@bmsit.in)
             </button>
           </div>
         )}
@@ -233,7 +434,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     type="email"
                     value={signInEmail}
                     onChange={(e) => setSignInEmail(e.target.value)}
-                    placeholder="e.g. rohan.24ai049@bmsit.in"
+                    required
+                    placeholder="student.usn@bmsit.in"
                     className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                   />
                 </div>
@@ -247,9 +449,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setMode('forgot')}
-                    className="text-[11px] text-[#E1467A] hover:underline font-medium"
+                    className="text-[11px] text-[#1C1C1C]/70 hover:underline hover:text-[#1C1C1C]"
                   >
-                    Forgot password?
+                    Forgot Password?
                   </button>
                 </div>
                 <div className="relative">
@@ -258,6 +460,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     type="password"
                     value={signInPassword}
                     onChange={(e) => setSignInPassword(e.target.value)}
+                    required
                     placeholder="••••••••"
                     className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                   />
@@ -266,45 +469,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <button
                 type="submit"
-                className="w-full py-2.5 rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] font-bold text-xs text-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] hover:bg-[#e49b2f] active:translate-x-0.5 active:translate-y-0.5 transition flex items-center justify-center gap-1.5"
+                disabled={loading}
+                className="w-full py-2.5 rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] font-bold text-xs text-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] hover:bg-[#e49b2f] transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
-                <span>Sign In to BMSIT Marketplace</span>
-                <ArrowRight className="w-4 h-4" />
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <span>Sign In to Marketplace</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </form>
-
-            {/* Quick Demo Switcher Section */}
-            <div className="mt-6 pt-5 border-t-2 border-dashed border-[#1C1C1C]/20">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 block mb-2.5">
-                ⚡ Quick Switch Demo Personas:
-              </span>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {students.slice(0, 4).map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => {
-                      switchUser(s.id);
-                      onClose();
-                    }}
-                    className={`p-2 rounded-xl border-1.5 border-[#1C1C1C] text-left transition flex items-center gap-2 shadow-[2px_2px_0px_#1C1C1C] ${
-                      currentUser.id === s.id
-                        ? 'bg-[#FFF1D9] ring-2 ring-[#F2A93B]'
-                        : 'bg-white hover:bg-[#FFF9E6]'
-                    }`}
-                  >
-                    <img
-                      src={s.avatar}
-                      alt={s.name}
-                      className="w-7 h-7 rounded-full border border-[#1C1C1C] object-cover"
-                    />
-                    <div className="min-w-0">
-                      <div className="font-bold truncate text-[#1C1C1C]">{s.name}</div>
-                      <div className="text-[10px] text-neutral-500 font-mono truncate">{s.usn}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
         )}
 
@@ -322,7 +499,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="e.g. Rohan Sharma"
+                  placeholder="e.g. Varun Gowda"
                   className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                 />
               </div>
@@ -462,19 +639,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] font-bold text-xs text-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] hover:bg-[#e49b2f] transition flex items-center justify-center gap-1.5 cursor-pointer"
+              disabled={loading}
+              className="w-full py-2.5 rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] font-bold text-xs text-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] hover:bg-[#e49b2f] transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
-              <span>Create Student Account</span>
-              <ArrowRight className="w-4 h-4" />
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <span>Create Student Account</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </form>
         )}
 
-        {/* 3. SIMULATED VERIFICATION SCREEN */}
+        {/* 3. REAL 6-DIGIT OTP VERIFICATION SCREEN */}
         {mode === 'verify' && (
           <form onSubmit={handleVerifyOtp} className="space-y-4 text-center">
             <div className="w-12 h-12 rounded-2xl bg-[#FFF1D9] border-2 border-[#1C1C1C] mx-auto flex items-center justify-center text-2xl shadow-[2px_2px_0px_#1C1C1C]">
-              📩
+              📬
             </div>
 
             <div>
@@ -482,30 +666,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 Verify Your BMSIT Email
               </h3>
               <p className="text-xs text-[#1C1C1C]/80 mt-1 max-w-sm mx-auto">
-                In production, a 6-digit confirmation code is dispatched to{' '}
+                A 6-digit confirmation code was sent to{' '}
                 <span className="font-mono font-bold text-[#1C1C1C]">
-                  {registeredDataPending?.email}
-                </span>.
+                  {pendingEmail}
+                </span>. Please check your college inbox or spam folder.
               </p>
-            </div>
-
-            {/* Demo Helper Box */}
-            <div className="bg-[#FFF9E6] border-2 border-[#1C1C1C] rounded-xl p-3 shadow-[2px_2px_0px_#1C1C1C] text-left">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[11px] font-bold text-neutral-600">
-                  ⚡ DEMO VERIFICATION CODE:
-                </span>
-                <span className="font-mono text-sm font-extrabold text-[#E1467A] tracking-widest">
-                  {generatedOtp}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEnteredOtp(generatedOtp)}
-                className="w-full py-1 text-[11px] font-bold bg-white border border-[#1C1C1C] rounded-lg hover:bg-[#F2A93B] transition"
-              >
-                Auto-fill Demo Code ({generatedOtp})
-              </button>
             </div>
 
             <div>
@@ -514,37 +679,60 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 required
                 maxLength={6}
                 value={enteredOtp}
-                onChange={(e) => setEnteredOtp(e.target.value)}
-                placeholder="Enter 6-digit code"
-                className="w-48 mx-auto text-center font-mono text-lg font-bold tracking-widest py-2 rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C]"
+                onChange={(e) => setEnteredOtp(e.target.value.replace(/\D/g, ''))}
+                placeholder="000000"
+                className="w-56 mx-auto text-center font-mono text-2xl font-black tracking-[0.3em] py-2.5 rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[3px_3px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="text-xs text-neutral-600">
+              {resendCooldown > 0 ? (
+                <span>Resend code in <strong className="font-mono">{resendCooldown}s</strong></span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={loading}
+                  className="font-bold text-[#1C1C1C] underline decoration-2 hover:text-[#F2A93B] cursor-pointer"
+                >
+                  Didn't receive code? Resend Code
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setMode('register')}
-                className="w-1/2 py-2 text-xs font-semibold rounded-xl border-2 border-[#1C1C1C] bg-white"
+                className="w-1/2 py-2.5 text-xs font-semibold rounded-xl border-2 border-[#1C1C1C] bg-white hover:bg-neutral-100 transition cursor-pointer"
               >
                 Back to Details
               </button>
               <button
                 type="submit"
-                className="w-1/2 py-2 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#e49b2f]"
+                disabled={loading || enteredOtp.trim().length !== 6}
+                className="w-1/2 py-2.5 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#e49b2f] transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
-                Verify & Activate
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <span>Verify & Activate</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </div>
           </form>
         )}
 
-        {/* 4. FORGOT PASSWORD SIMULATION */}
+        {/* 4. FORGOT PASSWORD */}
         {mode === 'forgot' && (
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <KeyRound className="w-5 h-5 text-[#F2A93B]" />
               <h3 className="font-head text-base font-bold text-[#1C1C1C]">
-                Password Reset Simulation
+                Reset Password
               </h3>
             </div>
 
@@ -552,10 +740,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="p-4 bg-[#FFF9E6] rounded-xl border-2 border-[#1C1C1C] text-xs space-y-2">
                 <div className="flex items-center gap-1.5 font-bold text-emerald-800">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Simulated reset link dispatched!</span>
+                  <span>Password reset link sent!</span>
                 </div>
                 <p className="text-neutral-700">
-                  A reset token was simulated for <span className="font-mono font-bold">{forgotEmail}</span>. No actual email was sent since this is a frontend demonstration.
+                  Check <span className="font-mono font-bold">{forgotEmail}</span> for a secure password reset link.
                 </p>
                 <button
                   type="button"
@@ -563,23 +751,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     setForgotSubmitted(false);
                     setMode('signin');
                   }}
-                  className="mt-2 px-3 py-1 bg-[#F2A93B] border border-[#1C1C1C] rounded-lg font-bold"
+                  className="mt-2 px-3 py-1 bg-[#F2A93B] border border-[#1C1C1C] rounded-lg font-bold cursor-pointer"
                 >
                   Return to Sign In
                 </button>
               </div>
             ) : (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!forgotEmail.endsWith('@bmsit.in')) {
-                    pushToast('Please enter your valid @bmsit.in address.', 'warning');
-                    return;
-                  }
-                  setForgotSubmitted(true);
-                }}
-                className="space-y-3"
-              >
+              <form onSubmit={handleForgotSubmit} className="space-y-3">
                 <p className="text-xs text-neutral-600">
                   Enter your registered BMSIT email address to receive password instructions.
                 </p>
@@ -595,15 +773,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setMode('signin')}
-                    className="text-xs text-neutral-500 hover:underline"
+                    className="text-xs text-neutral-500 hover:underline cursor-pointer"
                   >
                     Back to Sign In
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] shadow-[2px_2px_0px_#1C1C1C]"
+                    disabled={loading}
+                    className="px-4 py-2 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#e49b2f] cursor-pointer disabled:opacity-50"
                   >
-                    Simulate Password Reset
+                    {loading ? 'Sending...' : 'Send Reset Link'}
                   </button>
                 </div>
               </form>
