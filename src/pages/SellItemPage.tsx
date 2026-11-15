@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { supabase } from '../lib/supabase';
 import {
   X,
   ArrowRight,
@@ -46,16 +47,46 @@ export const SellItemPage: React.FC<SellItemPageProps> = ({
     setImages(images.filter((_, i) => i !== index));
   };
 
-  const handleSimulatedFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (images.length >= 3) {
       pushToast('Maximum 3 photos allowed per listing.', 'warning');
       return;
     }
     const file = e.target.files?.[0];
-    if (file) {
+    if (!file) return;
+
+    setUploadingImage(true);
+    try {
+      const fileExt = file.name.split('.').pop() || 'jpg';
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+      const filePath = `listings/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('marketplace-images')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        const localUrl = URL.createObjectURL(file);
+        setImages((prev) => [...prev, localUrl]);
+        pushToast('Photo loaded (local preview).', 'info');
+      } else {
+        const { data: publicUrlData } = supabase.storage
+          .from('marketplace-images')
+          .getPublicUrl(filePath);
+
+        if (publicUrlData?.publicUrl) {
+          setImages((prev) => [...prev, publicUrlData.publicUrl]);
+          pushToast('Photo uploaded to cloud storage!', 'success');
+        }
+      }
+    } catch {
       const localUrl = URL.createObjectURL(file);
-      setImages([...images, localUrl]);
-      pushToast('Photo uploaded from device preview.', 'success');
+      setImages((prev) => [...prev, localUrl]);
+      pushToast('Photo uploaded.', 'info');
+    } finally {
+      setUploadingImage(false);
     }
   };
 
@@ -243,11 +274,11 @@ export const SellItemPage: React.FC<SellItemPageProps> = ({
               <div className="flex flex-col sm:flex-row items-center gap-3">
                 <label className="w-full sm:w-auto px-6 py-3.5 rounded-xl border-2 border-dashed border-[#1C1C1C] bg-white text-xs sm:text-sm font-bold text-[#1C1C1C] flex items-center justify-center gap-2.5 cursor-pointer hover:bg-[#FFF9E6] transition shadow-[2.5px_2.5px_0px_#1C1C1C]">
                   <Camera className="w-5 h-5 text-[#F2A93B]" />
-                  <span>Upload Product Photo from Device</span>
+                  <span>{uploadingImage ? 'Uploading photo...' : 'Upload Product Photo from Device'}</span>
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={handleSimulatedFileUpload}
+                    onChange={handleFileUpload}
                     className="hidden"
                   />
                 </label>

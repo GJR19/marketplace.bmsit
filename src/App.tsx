@@ -31,6 +31,13 @@ const MainApp: React.FC = () => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [activeTab]);
 
+  // Direct access to secret admin route /ishowspeed
+  useEffect(() => {
+    if (window.location.pathname.toLowerCase().includes('/ishowspeed')) {
+      setActiveTab('admin');
+    }
+  }, []);
+
   // Deep-link direct product opening from shared links
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

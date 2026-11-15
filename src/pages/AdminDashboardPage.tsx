@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { supabase } from '../lib/supabase';
 import {
   Shield,
   CheckCircle2,
@@ -77,6 +78,54 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   // Inspection preview modal
   const [inspectProduct, setInspectProduct] = useState<Product | null>(null);
 
+  // Server-authenticated Admin Session
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
+    return sessionStorage.getItem('bmsit_admin_auth') === 'true';
+  });
+  const [adminUsername, setAdminUsername] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminUsername.trim() || !adminPassword) {
+      pushToast('Please enter both admin username and password.', 'warning');
+      return;
+    }
+
+    setLoginLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('admin_login', {
+        p_username: adminUsername.trim(),
+        p_password: adminPassword,
+      });
+
+      if (error) {
+        pushToast(error.message || 'Authentication error', 'error');
+        setLoginLoading(false);
+        return;
+      }
+
+      if (data && data.success) {
+        sessionStorage.setItem('bmsit_admin_auth', 'true');
+        setIsAdminAuthenticated(true);
+        pushToast('Admin authentication successful! Welcome to Moderation Portal.', 'success');
+      } else {
+        pushToast(data?.message || 'Invalid admin username or password.', 'error');
+      }
+    } catch (err: any) {
+      pushToast('Login failed: ' + err.message, 'error');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleAdminLogout = () => {
+    sessionStorage.removeItem('bmsit_admin_auth');
+    setIsAdminAuthenticated(false);
+    pushToast('Admin logged out successfully.', 'info');
+  };
+
   // Statistics
   const pendingCount = products.filter((p) => p.status === 'pending_approval').length;
   const approvedCount = products.filter((p) => p.status === 'approved').length;
@@ -127,6 +176,91 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     setRejectModalOpen(false);
   };
 
+  if (!isAdminAuthenticated) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-[#FFFBF5] rounded-3xl border-3 border-[#1C1C1C] shadow-[8px_8px_0px_#1C1C1C] p-8 text-center space-y-6">
+          <div className="w-16 h-16 rounded-2xl bg-[#F2A93B] border-3 border-[#1C1C1C] mx-auto flex items-center justify-center text-3xl shadow-[3px_3px_0px_#1C1C1C]">
+            🛡️
+          </div>
+
+          <div>
+            <div className="nb-sticker text-xs bg-[#E1467A] text-white inline-block mb-2">
+              RESTRICTED MODERATOR AREA
+            </div>
+            <h2 className="font-head text-2xl font-extrabold text-[#1C1C1C]">
+              BMSIT Moderator Admin
+            </h2>
+            <p className="text-xs text-neutral-600 mt-1">
+              Server-authenticated moderation portal. Unauthorized access is strictly prohibited.
+            </p>
+          </div>
+
+          <form onSubmit={handleAdminLogin} className="space-y-4 text-left">
+            <div>
+              <label className="block text-xs font-bold text-[#1C1C1C] mb-1">
+                Admin Username
+              </label>
+              <div className="relative">
+                <User className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  required
+                  value={adminUsername}
+                  onChange={(e) => setAdminUsername(e.target.value)}
+                  placeholder="admin"
+                  className="w-full pl-9 pr-3 py-2.5 text-xs font-medium rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#1C1C1C] mb-1">
+                Admin Password
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
+                <input
+                  type="password"
+                  required
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="w-full pl-9 pr-3 py-2.5 text-xs font-medium rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loginLoading}
+              className="w-full py-3 rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] font-bold text-xs text-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] hover:bg-[#e49b2f] transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {loginLoading ? (
+                <span>Verifying credentials...</span>
+              ) : (
+                <>
+                  <Shield className="w-4 h-4" />
+                  <span>Authenticate as Administrator</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="pt-2 border-t border-[#1C1C1C]/15 text-xs text-neutral-500">
+            <button
+              type="button"
+              onClick={() => { window.location.href = '/'; }}
+              className="hover:underline font-semibold text-[#1C1C1C] cursor-pointer"
+            >
+              ← Return to Campus Marketplace
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
       {/* Admin Header Banner */}
@@ -150,12 +284,14 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
+          <div className="nb-sticker text-xs bg-emerald-100 text-emerald-900 border border-emerald-800">
+            ✓ Super Admin Active
+          </div>
           <button
-            onClick={() => setResetModalOpen(true)}
-            className="px-4 py-2.5 rounded-xl border-2 border-[#1C1C1C] bg-[#FDF2F4] text-[#E1467A] font-bold text-xs shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#fde2e7] transition flex items-center gap-1.5"
+            onClick={handleAdminLogout}
+            className="px-4 py-2.5 rounded-xl border-2 border-[#1C1C1C] bg-white hover:bg-neutral-100 text-neutral-800 font-bold text-xs shadow-[2px_2px_0px_#1C1C1C] transition flex items-center gap-1.5 cursor-pointer"
           >
-            <RotateCcw className="w-4 h-4" />
-            <span>Reset Demo Data</span>
+            <span>Log Out</span>
           </button>
         </div>
       </div>
