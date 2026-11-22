@@ -42,10 +42,15 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     isWishlisted,
     currentUser,
     pushToast,
+    submitReport,
   } = useApp();
 
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportReason, setReportReason] = useState('Prohibited or Dangerous Item');
+  const [reportDetails, setReportDetails] = useState('');
+  const [reportSubmitted, setReportSubmitted] = useState(false);
 
   if (!isOpen || !product) return null;
 
@@ -327,8 +332,21 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     </button>
                 )}
 
-                <div className="flex items-center justify-end pt-1">
-                  <div className="text-[11px] text-neutral-500 font-mono">
+                <div className="flex items-center justify-between pt-1">
+                  {!isOwner && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReportSubmitted(false);
+                        setReportModalOpen(true);
+                      }}
+                      className="text-[11px] text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1 font-semibold transition cursor-pointer"
+                    >
+                      <Flag className="w-3.5 h-3.5 text-rose-500" />
+                      <span>Report listing</span>
+                    </button>
+                  )}
+                  <div className="text-[11px] text-neutral-500 font-mono ml-auto">
                     ID: {product.id}
                   </div>
                 </div>
@@ -402,6 +420,112 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         </div>
       </div>
 
+      {/* Moderation Report Modal */}
+      {reportModalOpen && (
+        <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#FFFBF5] rounded-3xl border-3 border-[#1C1C1C] shadow-[6px_6px_0px_#1C1C1C] max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center justify-between pb-3 border-b-2 border-[#1C1C1C]/15">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-rose-100 rounded-xl border-2 border-[#1C1C1C] text-rose-600">
+                  <Flag className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-head font-extrabold text-lg text-[#1C1C1C]">Report Listing</h3>
+                  <p className="text-[11px] text-neutral-500 truncate max-w-[220px]">{product.title}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReportModalOpen(false)}
+                className="p-1.5 rounded-lg border-2 border-[#1C1C1C] bg-white hover:bg-neutral-100 cursor-pointer"
+              >
+                <X className="w-4 h-4 text-[#1C1C1C]" />
+              </button>
+            </div>
+
+            {reportSubmitted ? (
+              <div className="p-5 bg-emerald-50 rounded-2xl border-2 border-emerald-800 text-center space-y-2">
+                <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
+                <h4 className="font-head font-bold text-base text-emerald-900">Report Received</h4>
+                <p className="text-xs text-emerald-800 leading-relaxed">
+                  Thank you for keeping BMSIT safe. Our moderators and admin have been immediately notified via email.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setReportModalOpen(false)}
+                  className="mt-3 px-4 py-2 rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] font-bold text-xs shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#e49b2f] cursor-pointer"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  submitReport({
+                    targetType: 'product',
+                    targetId: product.id,
+                    targetTitle: product.title,
+                    reporterId: currentUser.id,
+                    reporterName: currentUser.name,
+                    reason: reportReason,
+                    details: reportDetails,
+                  });
+                  setReportSubmitted(true);
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-xs font-bold text-[#1C1C1C] mb-1.5">
+                    Why are you reporting this listing?
+                  </label>
+                  <select
+                    value={reportReason}
+                    onChange={(e) => setReportReason(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border-2 border-[#1C1C1C] bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                  >
+                    <option value="Prohibited or Dangerous Item">Prohibited or Dangerous Item</option>
+                    <option value="Scam, Fraud or Counterfeit">Scam, Fraud or Counterfeit</option>
+                    <option value="Inappropriate Content or Photos">Inappropriate Content or Photos</option>
+                    <option value="Overpriced / Scalping / Commercial Sale">Overpriced / Scalping / Commercial Sale</option>
+                    <option value="Misleading Information or Wrong Category">Misleading Information or Wrong Category</option>
+                    <option value="Other Policy Violation">Other Policy Violation</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#1C1C1C] mb-1.5">
+                    Additional Details (Optional)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={reportDetails}
+                    onChange={(e) => setReportDetails(e.target.value)}
+                    placeholder="Describe what's wrong with this listing..."
+                    className="w-full p-3 rounded-xl border-2 border-[#1C1C1C] bg-white text-xs placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#F2A93B] resize-none"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setReportModalOpen(false)}
+                    className="flex-1 py-2.5 px-4 rounded-xl border-2 border-[#1C1C1C] bg-white font-bold text-xs hover:bg-neutral-100 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 px-4 rounded-xl border-2 border-[#1C1C1C] bg-rose-600 text-white font-bold text-xs shadow-[3px_3px_0px_#1C1C1C] hover:bg-rose-700 active:translate-x-0.5 active:translate-y-0.5 cursor-pointer"
+                  >
+                    Submit Report
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

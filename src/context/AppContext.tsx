@@ -447,9 +447,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const loadLiveReports = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('reports')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        const liveReports: ModerationReport[] = data.map((r: any) => ({
+          id: r.id,
+          targetType: r.target_type,
+          targetId: r.target_id || '',
+          targetTitle: r.target_title,
+          reporterId: r.reporter_id || '',
+          reporterName: r.reporter_name || 'BMSIT Student',
+          reason: r.reason,
+          details: r.details || '',
+          status: r.status,
+          timestamp: new Date(r.created_at).toLocaleString(),
+        }));
+
+        setReports((prev) => {
+          const liveIds = new Set(liveReports.map((item) => item.id));
+          const retained = prev.filter((item) => !liveIds.has(item.id));
+          return [...liveReports, ...retained];
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to fetch reports from Supabase:', err);
+    }
+  };
+
   useEffect(() => {
     loadLiveProducts();
     loadLiveWantedRequests();
+    loadLiveReports();
   }, []);
 
   // Supabase User Notifications Hydration & Realtime Channel
@@ -1483,13 +1516,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Moderation & Admin
   const submitReport = (report: Omit<ModerationReport, 'id' | 'timestamp' | 'status'>) => {
+    const reportId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'rep-' + Date.now();
     const newRep: ModerationReport = {
       ...report,
-      id: 'rep-' + Date.now(),
+      id: reportId,
       status: 'open',
       timestamp: new Date().toLocaleString(),
     };
     setReports((prev) => [newRep, ...prev]);
+
+    // Persist to Supabase reports table
+    supabase
+      .from('reports')
+      .insert({
+        id: isUUID(reportId) ? reportId : undefined,
+        target_type: report.targetType,
+        target_id: report.targetId,
+        target_title: report.targetTitle,
+        reporter_id: isUUID(currentUser?.id) ? currentUser.id : null,
+        reporter_name: currentUser?.name || 'BMSIT Student',
+        reason: report.reason,
+        details: report.details,
+        status: 'open',
+      })
+      .then(({ error }) => {
+        if (error) console.warn('Supabase submitReport error:', error.message);
+      });
+
+    // Send immediate email notification to Admin via /api/send-email
+    fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: 'gjr19atwork@gmail.com',
+        subject: `🚨 [ALERT] Campus Safety Report: ${report.targetTitle}`,
+        html: `
+          <div style="font-family:sans-serif;padding:24px;border:3px solid #E1467A;border-radius:12px;background:#FFF0F5;">
+            <h2 style="color:#C71F52;margin:0 0 12px 0;">🚨 Campus Safety Report Submitted</h2>
+            <p>A student has flagged a listing or user on BMSIT Marketplace.</p>
+            <p><strong>Reported Item/User:</strong> ${report.targetTitle} (${report.targetType})</p>
+            <p><strong>Reason:</strong> ${report.reason}</p>
+            <p><strong>Details:</strong> ${report.details || 'None provided'}</p>
+            <p><strong>Reported By:</strong> ${currentUser?.name || 'Student'} (${currentUser?.usn || 'BMSIT'})</p>
+            <p><strong>Student Email:</strong> ${currentUser?.email || 'N/A'}</p>
+            <p style="margin-top:20px;">
+              <a href="https://marketplace.bmsit.co.in/ishowspeed" style="display:inline-block;padding:12px 20px;background:#C71F52;color:#ffffff;font-weight:bold;text-decoration:none;border-radius:8px;">
+                Review in Admin Portal &rarr;
+              </a>
+            </p>
+          </div>
+        `,
+      }),
+    }).catch(() => {});
+
     pushToast('Report submitted. Moderator team will review.', 'info');
   };
 
@@ -1497,6 +1576,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setReports((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status } : r))
     );
+
+    if (isUUID(id)) {
+      supabase
+        .rpc('admin_update_report_status', {
+          p_report_id: id,
+          p_status: status,
+        })
+        .then(({ error }) => {
+          if (error) console.warn('admin_update_report_status error:', error.message);
+        });
+    }
+
     pushToast(`Report status updated to ${status}.`, 'info');
   };
 
