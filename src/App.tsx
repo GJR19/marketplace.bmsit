@@ -188,9 +188,6 @@ const MainApp: React.FC = () => {
         onOpenAuth={() => setAuthModalOpen(true)}
       />
 
-      {/* Global Alerts & Toast Container */}
-      <ToastContainer />
-
       {/* Auth & Personas Modal */}
       <AuthModal
         isOpen={authModalOpen}
@@ -206,6 +203,9 @@ const MainApp: React.FC = () => {
         onOpenProduct={handleOpenDetails}
         onOpenAuth={() => setAuthModalOpen(true)}
       />
+
+      {/* Global Alerts & Toast Container (Rendered on top of modals & backdrops) */}
+      <ToastContainer />
     </div>
   );
 };

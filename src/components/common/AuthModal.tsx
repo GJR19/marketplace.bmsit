@@ -38,6 +38,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Sign In state
   const [signInEmail, setSignInEmail] = useState('');
   const [signInPassword, setSignInPassword] = useState('');
+  const [signInError, setSignInError] = useState<string | null>(null);
 
   // Register form state
   const [fullName, setFullName] = useState('');
@@ -283,6 +284,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
+    setSignInError(null);
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -291,11 +293,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       });
 
       if (error) {
-        if (error.message.toLowerCase().includes('email not confirmed')) {
+        const msg = error.message.toLowerCase();
+        if (msg.includes('email not confirmed')) {
           setPendingEmail(trimmedEmail);
           setMode('verify');
           pushToast('Please enter the 6-digit verification code sent to your email.', 'info');
+        } else if (
+          msg.includes('invalid login credentials') ||
+          msg.includes('invalid credentials') ||
+          msg.includes('invalid') ||
+          msg.includes('user not found')
+        ) {
+          const userFriendlyError = 'Invalid email or password. Please register if you do not have an account.';
+          setSignInError(userFriendlyError);
+          pushToast(userFriendlyError, 'error');
         } else {
+          setSignInError(error.message);
           pushToast(error.message, 'error');
         }
         setLoading(false);
@@ -397,7 +410,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div className="grid grid-cols-2 p-1 bg-[#FFF9E6] rounded-xl border-2 border-[#1C1C1C] mb-5 shadow-[2px_2px_0px_#1C1C1C]">
             <button
               type="button"
-              onClick={() => setMode('signin')}
+              onClick={() => {
+                setSignInError(null);
+                setMode('signin');
+              }}
               className={`py-2 text-xs font-bold rounded-lg transition ${
                 mode === 'signin'
                   ? 'bg-[#1C1C1C] text-[#FFFBEA]'
@@ -408,7 +424,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setMode('register')}
+              onClick={() => {
+                setSignInError(null);
+                setMode('register');
+              }}
               className={`py-2 text-xs font-bold rounded-lg transition ${
                 mode === 'register'
                   ? 'bg-[#1C1C1C] text-[#FFFBEA]'
@@ -433,7 +452,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <input
                     type="email"
                     value={signInEmail}
-                    onChange={(e) => setSignInEmail(e.target.value)}
+                    onChange={(e) => {
+                      setSignInEmail(e.target.value);
+                      if (signInError) setSignInError(null);
+                    }}
                     required
                     className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                   />
@@ -447,7 +469,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </label>
                   <button
                     type="button"
-                    onClick={() => setMode('forgot')}
+                    onClick={() => {
+                      setSignInError(null);
+                      setMode('forgot');
+                    }}
                     className="text-[11px] text-[#1C1C1C]/70 hover:underline hover:text-[#1C1C1C]"
                   >
                     Forgot Password?
@@ -458,12 +483,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <input
                     type="password"
                     value={signInPassword}
-                    onChange={(e) => setSignInPassword(e.target.value)}
+                    onChange={(e) => {
+                      setSignInPassword(e.target.value);
+                      if (signInError) setSignInError(null);
+                    }}
                     required
                     className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                   />
                 </div>
               </div>
+
+              {signInError && (
+                <div className="p-3 rounded-xl border-2 border-rose-600 bg-rose-50 text-rose-900 text-xs font-bold flex items-center justify-between gap-2 shadow-[2px_2px_0px_#1C1C1C]">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{signInError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSignInError(null);
+                      setMode('register');
+                    }}
+                    className="text-[11px] underline font-extrabold text-rose-700 hover:text-rose-900 shrink-0 cursor-pointer"
+                  >
+                    Register →
+                  </button>
+                </div>
+              )}
 
               <button
                 type="submit"
