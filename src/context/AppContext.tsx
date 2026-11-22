@@ -10,6 +10,7 @@ import {
   ModerationReport,
   CampusLocation,
   AdminLog,
+  ProductCategory,
 } from '../types';
 import {
   INITIAL_PRODUCTS,
@@ -389,8 +390,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Supabase Live Wanted Requests Hydration
+  const loadLiveWantedRequests = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('wanted_requests')
+        .select(`
+          id,
+          title,
+          description,
+          category,
+          max_budget,
+          urgency,
+          status,
+          created_at,
+          requester_id,
+          requester:profiles!requester_id (
+            full_name,
+            usn,
+            branch,
+            admission_year
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        const liveReqs: WantedRequest[] = data.map((row: any) => ({
+          id: row.id,
+          title: row.title,
+          category: row.category as ProductCategory,
+          description: row.description || '',
+          maxBudget: row.max_budget ? Number(row.max_budget) : undefined,
+          studentId: row.requester_id,
+          studentName: row.requester?.full_name || 'BMSIT Student',
+          studentUSN: row.requester?.usn || '1BY24XX000',
+          studentBranch: row.requester?.branch || 'Engineering',
+          studentAdmissionYear: Number(row.requester?.admission_year) || 2024,
+          status: 'open' as const,
+          responses: [],
+          postedDate: row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+        }));
+
+        setWantedRequests((prev) => {
+          const liveIds = new Set(liveReqs.map((r) => r.id));
+          const retained = prev.filter((r) => !liveIds.has(r.id));
+          return [...liveReqs, ...retained];
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to fetch wanted requests from Supabase:', err);
+    }
+  };
+
   useEffect(() => {
     loadLiveProducts();
+    loadLiveWantedRequests();
   }, []);
 
   // Supabase User Notifications Hydration
@@ -776,15 +830,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addWantedRequest = (
     requestData: Omit<WantedRequest, 'id' | 'postedDate' | 'responses' | 'status'>
   ): WantedRequest => {
+    const reqId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'wnt-' + Date.now();
     const newReq: WantedRequest = {
       ...requestData,
-      id: 'wnt-' + Date.now(),
+      id: reqId,
       status: 'open',
       postedDate: new Date().toISOString().split('T')[0],
       responses: [],
     };
 
     setWantedRequests((prev) => [newReq, ...prev]);
+
+    // Insert into Supabase (triggers trg_notify_admin_new_wanted_request)
+    if (currentUser?.id) {
+      supabase
+        .from('wanted_requests')
+        .insert({
+          id: reqId,
+          title: newReq.title,
+          description: newReq.description || 'Looking for this item on campus.',
+          category: newReq.category,
+          max_budget: newReq.maxBudget || null,
+          requester_id: currentUser.id,
+          status: 'approved',
+        })
+        .then(({ error }) => {
+          if (error) console.warn('Supabase wanted request insert error:', error.message);
+        });
+    }
+
+    // Dispatch automated email alert to admin
+    fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: 'gjr19atwork@gmail.com',
+        subject: `📌 New Wanted Request: ${newReq.title}`,
+        html: `
+          <div style="font-family:sans-serif;padding:24px;border:3px solid #1C1C1C;border-radius:12px;background:#FFFBEA;">
+            <h2 style="color:#1C1C1C;margin:0 0 12px 0;">New Wanted Request Posted</h2>
+            <p><strong>Item Needed:</strong> ${newReq.title}</p>
+            <p><strong>Category:</strong> ${newReq.category}</p>
+            <p><strong>Details:</strong> ${newReq.description}</p>
+            <p><strong>Student:</strong> ${currentUser.name} (${currentUser.usn})</p>
+            <p><strong>Email:</strong> ${currentUser.email}</p>
+            <p style="margin-top:20px;">
+              <a href="https://marketplace.bmsit.co.in/ishowspeed" style="display:inline-block;padding:10px 18px;background:#F2A93B;color:#1C1C1C;font-weight:bold;text-decoration:none;border:2px solid #1C1C1C;border-radius:6px;">
+                View in Admin Portal &rarr;
+              </a>
+            </p>
+          </div>
+        `,
+      }),
+    }).catch(() => {});
 
     // Add notification
     const notif: NotificationItem = {
@@ -812,6 +910,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteWantedRequest = (id: string) => {
     setWantedRequests((prev) => prev.filter((r) => r.id !== id));
+    supabase
+      .from('wanted_requests')
+      .delete()
+      .eq('id', id)
+      .then(({ error }) => {
+        if (error) console.warn('Supabase wanted request delete error:', error.message);
+      });
     pushToast('Wanted request deleted.', 'info');
   };
 

@@ -21,9 +21,10 @@ import {
   Sparkles,
   FileText,
   MapPin,
+  Tag,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { Product, Student, ProductCategory, ListingStatus } from '../types';
+import { Product, Student, ProductCategory, ListingStatus, WantedRequest } from '../types';
 import { ConfirmModal } from '../components/common/ConfirmModal';
 import { formatPriceINR } from '../utils/usnParser';
 
@@ -53,7 +54,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   } = useApp();
 
   const [activeAdminTab, setActiveAdminTab] = useState<
-    'queue' | 'users' | 'reports' | 'logs' | 'locations'
+    'queue' | 'wanted' | 'users' | 'reports' | 'logs' | 'locations'
   >('queue');
 
   // Listing queue filter
@@ -130,6 +131,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   // Live Supabase Admin Data
   const [dbProducts, setDbProducts] = useState<Product[]>([]);
   const [dbUsers, setDbUsers] = useState<any[]>([]);
+  const [dbWantedRequests, setDbWantedRequests] = useState<WantedRequest[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchAdminData = async () => {
@@ -169,6 +171,27 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       if (!userErr && userData && userData.length > 0) {
         setDbUsers(userData);
       }
+
+      // 3. Fetch live wanted requests from admin RPC
+      const { data: wantedData, error: wantedErr } = await supabase.rpc('admin_get_all_wanted_requests');
+      if (!wantedErr && wantedData && wantedData.length > 0) {
+        const mappedWanted: WantedRequest[] = wantedData.map((row: any) => ({
+          id: row.id,
+          title: row.title,
+          category: row.category as ProductCategory,
+          description: row.description || '',
+          maxBudget: row.max_budget ? Number(row.max_budget) : undefined,
+          studentId: row.requester_id,
+          studentName: row.student_name || 'BMSIT Student',
+          studentUSN: row.student_usn || '1BY24XX000',
+          studentBranch: row.student_branch || 'Engineering',
+          studentAdmissionYear: Number(row.student_admission_year) || 2024,
+          status: 'open' as const,
+          responses: [],
+          postedDate: row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+        }));
+        setDbWantedRequests(mappedWanted);
+      }
     } catch (e) {
       console.warn('Error loading admin data:', e);
     } finally {
@@ -184,6 +207,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
   // Combined Live & Fallback Collections
   const currentProducts = dbProducts.length > 0 ? dbProducts : products;
+  const currentWantedRequests = dbWantedRequests.length > 0 ? dbWantedRequests : wantedRequests;
   const currentStudents: Student[] = dbUsers.length > 0
     ? dbUsers.map((u: any) => ({
         id: u.id,
@@ -200,6 +224,12 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
         phone: u.phone || '',
       }))
     : students;
+
+  const handleDeleteWanted = async (id: string) => {
+    setDbWantedRequests((prev) => prev.filter((r) => r.id !== id));
+    await supabase.rpc('admin_delete_wanted_request', { p_request_id: id });
+    pushToast('Wanted request removed by admin.', 'info');
+  };
 
   // Statistics
   const pendingCount = currentProducts.filter((p) => p.status === 'pending_approval').length;
@@ -437,7 +467,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       <div className="flex flex-wrap items-center gap-2 p-1.5 bg-[#FFFBEA] rounded-2xl border-2 border-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C]">
         {[
           { id: 'queue', label: 'Listing Approval Queue', icon: Package, badge: pendingCount > 0 ? `${pendingCount}` : undefined },
-          { id: 'users', label: 'Student Accounts', icon: User, badge: `${students.length}` },
+          { id: 'wanted', label: 'Wanted Board', icon: Tag, badge: `${currentWantedRequests.length}` },
+          { id: 'users', label: 'Student Accounts', icon: User, badge: `${currentStudents.length}` },
           { id: 'reports', label: 'Moderation Reports', icon: Flag, badge: openReportsCount > 0 ? `${openReportsCount}` : undefined },
           { id: 'logs', label: 'Audit Activity Log', icon: FileText },
           { id: 'locations', label: 'Exchange Spots', icon: MapPin },
@@ -622,6 +653,84 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
           ) : (
             <div className="p-8 text-center bg-white rounded-2xl border-2 border-[#1C1C1C] text-xs text-neutral-600">
               No listings in this queue view.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── TAB: WANTED BOARD REQUESTS ─── */}
+      {activeAdminTab === 'wanted' && (
+        <div className="space-y-4">
+          <div className="p-4 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] flex items-center justify-between">
+            <div>
+              <h3 className="font-head font-bold text-base text-[#1C1C1C]">
+                Campus Wanted Board Requests ({currentWantedRequests.length})
+              </h3>
+              <p className="text-xs text-neutral-600">
+                Items BMSIT students are actively looking to buy or borrow on campus.
+              </p>
+            </div>
+            <button
+              onClick={fetchAdminData}
+              className="px-3 py-1.5 text-xs font-bold rounded-lg border border-[#1C1C1C] bg-[#FFF9E6] hover:bg-[#FFE082] transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+              <span>Refresh</span>
+            </button>
+          </div>
+
+          {currentWantedRequests.length > 0 ? (
+            <div className="space-y-3">
+              {currentWantedRequests.map((req) => (
+                <div
+                  key={req.id}
+                  className="p-5 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] flex flex-col md:flex-row md:items-center justify-between gap-4"
+                >
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded border border-[#1C1C1C] bg-[#FFE082] text-[#1C1C1C]">
+                        WANTED ITEM
+                      </span>
+                      <span className="text-[11px] font-bold text-[#E1467A]">
+                        {req.category}
+                      </span>
+                      <span className="text-[10px] text-neutral-500 font-mono">
+                        {req.postedDate}
+                      </span>
+                    </div>
+
+                    <h4 className="font-head font-bold text-base text-[#1C1C1C]">
+                      {req.title}
+                    </h4>
+
+                    {req.description && (
+                      <p className="text-xs text-neutral-700 bg-[#FFFBEA] p-2.5 rounded-xl border border-[#1C1C1C]/15 max-w-2xl">
+                        "{req.description}"
+                      </p>
+                    )}
+
+                    <div className="text-[11px] text-neutral-600 font-mono">
+                      Requested by: <strong className="text-[#1C1C1C]">{req.studentName}</strong> (
+                      <strong>{req.studentUSN}</strong>) • {req.studentBranch}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                    <button
+                      onClick={() => handleDeleteWanted(req.id)}
+                      className="px-3 py-1.5 text-xs font-bold rounded-lg border border-[#1C1C1C] text-[#E1467A] hover:bg-[#FDF2F4] transition flex items-center gap-1 cursor-pointer"
+                      title="Remove wanted request"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-8 bg-white rounded-2xl border-2 border-dashed border-[#1C1C1C] text-center text-xs text-neutral-500">
+              No active wanted requests posted yet.
             </div>
           )}
         </div>
