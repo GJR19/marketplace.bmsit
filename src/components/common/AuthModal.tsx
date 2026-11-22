@@ -161,6 +161,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         return;
       }
 
+      if (data.session && data.user) {
+        // Immediate login when email confirmation is disabled in Supabase
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profile) {
+          setCurrentUser(profileToStudent(profile));
+        } else {
+          registerUser({
+            id: data.user.id,
+            name: fullName.trim(),
+            email: trimmedEmail,
+            usn: usnInput.trim().toUpperCase(),
+            branch: finalBranch,
+            admissionYear: usnResult.admissionYearFull || 2024,
+            currentYear: usnResult.currentYear || '1st Year (Fresher)',
+          });
+        }
+
+        triggerConfetti();
+        pushToast('Account created successfully! Welcome to BMSIT Marketplace.', 'success');
+        onClose();
+        setLoading(false);
+        return;
+      }
+
       setPendingEmail(trimmedEmail);
       setPendingData({
         name: fullName.trim(),
