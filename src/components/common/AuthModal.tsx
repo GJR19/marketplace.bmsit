@@ -371,7 +371,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         if (msg.includes('email not confirmed')) {
           setPendingEmail(trimmedEmail);
           setMode('verify');
-          pushToast('Please enter the 6-digit verification code sent to your email.', 'info');
+          pushToast('Please enter the OTP verification code sent to your email.', 'info');
         } else if (
           msg.includes('invalid login credentials') ||
           msg.includes('invalid credentials') ||
