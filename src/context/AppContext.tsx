@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { supabase, profileToStudent } from '../lib/supabase';
 import {
@@ -29,6 +29,9 @@ export interface ToastMessage {
   message: string;
   type: 'success' | 'error' | 'info' | 'warning';
 }
+
+const isUUID = (str?: string): boolean =>
+  Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
 
 interface AppContextType {
   products: Product[];
@@ -169,6 +172,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem(STORAGE_KEYS.CHATS);
     return saved ? JSON.parse(saved) : INITIAL_CHATS;
   });
+
+  const conversationIdMap = useRef<Record<string, string>>({});
 
   // STRICT PRIVACY: currentUser only receives their own private conversations!
   const chats = useMemo(() => {
@@ -488,6 +493,136 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         },
         () => {
           fetchNotifications();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser?.id]);
+
+  // Supabase User Conversations & Messages Hydration + Realtime
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    const loadLiveChats = async () => {
+      try {
+        const { data, error } = await supabase.rpc('get_user_conversations');
+        if (!error && data && data.length > 0) {
+          const convIds = data.map((d: any) => d.conversation_id);
+          const { data: messagesData } = await supabase
+            .from('messages')
+            .select('*')
+            .in('conversation_id', convIds)
+            .order('created_at', { ascending: true });
+
+          const messagesByConv: Record<string, any[]> = {};
+          if (messagesData) {
+            for (const m of messagesData) {
+              if (!messagesByConv[m.conversation_id]) messagesByConv[m.conversation_id] = [];
+              messagesByConv[m.conversation_id].push({
+                id: m.id,
+                conversationId: m.conversation_id,
+                senderId: m.sender_id,
+                senderName: m.sender_id === currentUser.id ? currentUser.name : 'Student',
+                text: m.message_text,
+                timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              });
+            }
+          }
+
+          const liveChats: ChatConversation[] = data.map((row: any) => ({
+            id: row.conversation_id,
+            participantIds: [currentUser.id, row.other_user_id],
+            participants: [
+              {
+                id: currentUser.id,
+                name: currentUser.name,
+                usn: currentUser.usn,
+                branch: currentUser.branch,
+                avatar: currentUser.avatar,
+              },
+              {
+                id: row.other_user_id,
+                name: row.other_user_name || 'BMSIT Student',
+                usn: row.other_user_usn || '1BY24XX000',
+                branch: row.other_user_branch || 'Engineering',
+                avatar: row.other_user_avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${row.other_user_usn || row.other_user_id}`,
+              },
+            ],
+            otherParticipant: {
+              id: row.other_user_id,
+              name: row.other_user_name || 'BMSIT Student',
+              usn: row.other_user_usn || '1BY24XX000',
+              branch: row.other_user_branch || 'Engineering',
+              avatar: row.other_user_avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${row.other_user_usn || row.other_user_id}`,
+            },
+            productId: row.product_id,
+            productTitle: row.product_title || 'Campus Item',
+            productPrice: row.product_price ? Number(row.product_price) : undefined,
+            productImage: row.product_image,
+            productStatus: row.product_status,
+            lastMessage: row.last_message || 'Started conversation',
+            lastMessageTime: row.last_message_time ? new Date(row.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently',
+            unreadCount: Number(row.unread_count) || 0,
+            messages: messagesByConv[row.conversation_id] || [],
+          }));
+
+          setAllChats((prev) => {
+            const liveIds = new Set(liveChats.map((c) => c.id));
+            const retained = prev.filter((c) => !liveIds.has(c.id));
+            return [...liveChats, ...retained];
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to load live chats:', err);
+      }
+    };
+
+    loadLiveChats();
+
+    const channel = supabase
+      .channel(`public:messages:${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+        },
+        (payload) => {
+          const newMsg = payload.new as any;
+          if (newMsg && newMsg.conversation_id) {
+            setAllChats((prev) => {
+              const convExists = prev.some((c) => c.id === newMsg.conversation_id);
+              if (!convExists) {
+                loadLiveChats();
+                return prev;
+              }
+              return prev.map((c) => {
+                if (c.id === newMsg.conversation_id) {
+                  if (c.messages.some((m) => m.id === newMsg.id)) return c;
+                  const formattedMsg = {
+                    id: newMsg.id,
+                    conversationId: newMsg.conversation_id,
+                    senderId: newMsg.sender_id,
+                    senderName: newMsg.sender_id === currentUser.id ? currentUser.name : (c.otherParticipant?.name || 'Student'),
+                    text: newMsg.message_text,
+                    timestamp: new Date(newMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  };
+                  return {
+                    ...c,
+                    lastMessage: newMsg.message_text,
+                    lastMessageTime: formattedMsg.timestamp,
+                    unreadCount: newMsg.sender_id !== currentUser.id ? (c.unreadCount || 0) + 1 : c.unreadCount,
+                    messages: [...c.messages, formattedMsg],
+                  };
+                }
+                return c;
+              });
+            });
+          }
         }
       )
       .subscribe();
@@ -1014,12 +1149,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
+    const targetConvId = conversationIdMap.current[conversationId] || conversationId;
     const now = new Date();
     const dateFormatted = `${now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}, ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    const msgId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'm-' + Date.now();
 
     const newMsg = {
-      id: 'm-' + Date.now(),
-      conversationId,
+      id: msgId,
+      conversationId: targetConvId,
       senderId: currentUser.id,
       senderName: currentUser.name,
       text,
@@ -1030,7 +1167,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setAllChats((prev) =>
       prev.map((c) => {
-        if (c.id === conversationId) {
+        if (c.id === conversationId || c.id === targetConvId) {
           return {
             ...c,
             lastMessage: text,
@@ -1041,6 +1178,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return c;
       })
     );
+
+    // Persist to Supabase messages table if UUID
+    if (isUUID(targetConvId) && isUUID(currentUser?.id)) {
+      supabase
+        .from('messages')
+        .insert({
+          id: msgId,
+          conversation_id: targetConvId,
+          sender_id: currentUser.id,
+          message_text: text,
+        })
+        .then(({ error }) => {
+          if (error) console.warn('Supabase message insert error:', error.message);
+        });
+    }
   };
 
   const startChatWithSeller = (product: Product, initialMessage?: string): string => {
@@ -1062,8 +1214,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const now = new Date();
     const dateFormatted = `${now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}, ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
+    const newConvId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'chat-' + Date.now();
+    conversationIdMap.current[newConvId] = newConvId;
+
+    const initialMsgId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'm-' + Date.now();
+    const initialMsgObj = initialMessage
+      ? {
+          id: initialMsgId,
+          conversationId: newConvId,
+          senderId: currentUser.id,
+          senderName: currentUser.name,
+          text: initialMessage,
+          timestamp: dateFormatted,
+        }
+      : undefined;
+
     // Create brand-new private 1-on-1 student conversation
-    const newConvId = 'chat-' + Date.now();
     const newConv: ChatConversation = {
       id: newConvId,
       participantIds: [currentUser.id, product.sellerId],
@@ -1099,21 +1265,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       lastMessage: initialMessage || 'Started conversation',
       lastMessageTime: dateFormatted,
       unreadCount: 0,
-      messages: initialMessage
-        ? [
-            {
-              id: 'm-' + Date.now(),
-              conversationId: newConvId,
-              senderId: currentUser.id,
-              senderName: currentUser.name,
-              text: initialMessage,
-              timestamp: dateFormatted,
-            },
-          ]
-        : [],
+      messages: initialMsgObj ? [initialMsgObj] : [],
     };
 
     setAllChats((prev) => [newConv, ...prev]);
+
+    // Persist to Supabase if authenticated with real profiles
+    if (isUUID(currentUser.id) && isUUID(product.sellerId)) {
+      supabase
+        .rpc('get_or_create_conversation', {
+          p_seller_id: product.sellerId,
+          p_product_id: isUUID(product.id) ? product.id : null,
+        })
+        .then(({ data, error }) => {
+          if (!error && data?.success && data?.conversation_id) {
+            const realId = data.conversation_id;
+            conversationIdMap.current[newConvId] = realId;
+            if (realId !== newConvId) {
+              setAllChats((prev) =>
+                prev.map((c) =>
+                  c.id === newConvId
+                    ? {
+                        ...c,
+                        id: realId,
+                        messages: c.messages.map((m) =>
+                          m.conversationId === newConvId ? { ...m, conversationId: realId } : m
+                        ),
+                      }
+                    : c
+                )
+              );
+            }
+            if (initialMessage) {
+              supabase
+                .from('messages')
+                .insert({
+                  id: initialMsgId,
+                  conversation_id: realId,
+                  sender_id: currentUser.id,
+                  message_text: initialMessage,
+                })
+                .then(({ error: msgErr }) => {
+                  if (msgErr) console.warn('Supabase initial message insert error:', msgErr.message);
+                });
+            }
+          }
+        });
+    }
+
     return newConvId;
   };
 
@@ -1139,7 +1338,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const now = new Date();
     const dateFormatted = `${now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}, ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
-    const newConvId = 'chat-wanted-' + Date.now();
+    const newConvId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'chat-wanted-' + Date.now();
+    conversationIdMap.current[newConvId] = newConvId;
+
+    const initialText = initialMessage || `Hi ${student.name.split(' ')[0]}, I saw your wanted request for "${wantedTitle}"! I might have what you need.`;
+    const initialMsgId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'm-' + Date.now();
+
     const newConv: ChatConversation = {
       id: newConvId,
       participantIds: [currentUser.id, student.id],
@@ -1167,31 +1371,86 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         avatar: student.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
       },
       productTitle: `Wanted: ${wantedTitle}`,
-      lastMessage: initialMessage || `Hi ${student.name.split(' ')[0]}, I saw your wanted request!`,
+      lastMessage: initialText,
       lastMessageTime: dateFormatted,
       unreadCount: 0,
       messages: [
         {
-          id: 'm-' + Date.now(),
+          id: initialMsgId,
           conversationId: newConvId,
           senderId: currentUser.id,
           senderName: currentUser.name,
-          text: initialMessage || `Hi ${student.name.split(' ')[0]}, I saw your wanted request for "${wantedTitle}"! I might have what you need.`,
+          text: initialText,
           timestamp: dateFormatted,
         },
       ],
     };
 
     setAllChats((prev) => [newConv, ...prev]);
+
+    // Persist to Supabase if authenticated
+    if (isUUID(currentUser.id) && isUUID(student.id)) {
+      supabase
+        .rpc('get_or_create_conversation', {
+          p_seller_id: student.id,
+          p_product_id: null,
+        })
+        .then(({ data, error }) => {
+          if (!error && data?.success && data?.conversation_id) {
+            const realId = data.conversation_id;
+            conversationIdMap.current[newConvId] = realId;
+            if (realId !== newConvId) {
+              setAllChats((prev) =>
+                prev.map((c) =>
+                  c.id === newConvId
+                    ? {
+                        ...c,
+                        id: realId,
+                        messages: c.messages.map((m) =>
+                          m.conversationId === newConvId ? { ...m, conversationId: realId } : m
+                        ),
+                      }
+                    : c
+                )
+              );
+            }
+            supabase
+              .from('messages')
+              .insert({
+                id: initialMsgId,
+                conversation_id: realId,
+                sender_id: currentUser.id,
+                message_text: initialText,
+              })
+              .then(({ error: msgErr }) => {
+                if (msgErr) console.warn('Supabase wanted chat initial message insert error:', msgErr.message);
+              });
+          }
+        });
+    }
+
     return newConvId;
   };
 
   const markChatAsRead = (conversationId: string) => {
+    const targetConvId = conversationIdMap.current[conversationId] || conversationId;
+
     setAllChats((prev) => {
-      const target = prev.find((c) => c.id === conversationId);
+      const target = prev.find((c) => c.id === conversationId || c.id === targetConvId);
       if (!target || target.unreadCount === 0) return prev;
-      return prev.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c));
+      return prev.map((c) => (c.id === conversationId || c.id === targetConvId ? { ...c, unreadCount: 0 } : c));
     });
+
+    if (isUUID(targetConvId) && isUUID(currentUser?.id)) {
+      supabase
+        .from('messages')
+        .update({ is_read: true })
+        .eq('conversation_id', targetConvId)
+        .neq('sender_id', currentUser.id)
+        .then(({ error }) => {
+          if (error) console.warn('Supabase markChatAsRead error:', error.message);
+        });
+    }
   };
 
   // Notifications
