@@ -13,9 +13,10 @@ import { WantedRequest, ProductCategory } from '../types';
 
 interface WantedBoardPageProps {
   onOpenChat?: (conversationId?: string) => void;
+  onOpenAuth?: () => void;
 }
 
-export const WantedBoardPage: React.FC<WantedBoardPageProps> = ({ onOpenChat }) => {
+export const WantedBoardPage: React.FC<WantedBoardPageProps> = ({ onOpenChat, onOpenAuth }) => {
   const {
     wantedRequests,
     addWantedRequest,
@@ -23,6 +24,8 @@ export const WantedBoardPage: React.FC<WantedBoardPageProps> = ({ onOpenChat }) 
     startChatWithStudent,
     pushToast,
   } = useApp();
+
+  const isLoggedIn = currentUser.id !== 'guest' && Boolean(currentUser.email) && currentUser.verified;
 
   // Category filter including 'Other'
   const [categoryFilter, setCategoryFilter] = useState<ProductCategory | 'All'>('All');
@@ -130,7 +133,13 @@ export const WantedBoardPage: React.FC<WantedBoardPageProps> = ({ onOpenChat }) 
 
           <div className="pt-1">
             <button
-              onClick={() => setCreateModalOpen(true)}
+              onClick={() => {
+                if (!isLoggedIn) {
+                  if (onOpenAuth) onOpenAuth();
+                  return;
+                }
+                setCreateModalOpen(true);
+              }}
               className="px-5 py-2.5 rounded-full border-2 border-[#1C1C1C] bg-[#F2A93B] text-xs sm:text-sm font-bold text-[#1C1C1C] shadow-[3.5px_3.5px_0px_#1C1C1C] hover:bg-[#e49b2f] transition flex items-center gap-2 cursor-pointer"
             >
               <PlusCircle className="w-4 h-4 text-[#1C1C1C]" />
@@ -233,11 +242,17 @@ export const WantedBoardPage: React.FC<WantedBoardPageProps> = ({ onOpenChat }) 
                       </div>
                     ) : (
                       <button
-                        onClick={() => handleStartChat(req)}
+                        onClick={() => {
+                          if (!isLoggedIn) {
+                            if (onOpenAuth) onOpenAuth();
+                            return;
+                          }
+                          handleStartChat(req);
+                        }}
                         className="w-full py-2.5 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] shadow-[3px_3px_0px_#1C1C1C] hover:bg-[#e49b2f] active:translate-x-0.5 active:translate-y-0.5 transition flex items-center justify-center gap-2 cursor-pointer"
                       >
                         <Tag className="w-4 h-4 text-[#1C1C1C]" />
-                        <span>Make an Offer</span>
+                        <span>{isLoggedIn ? 'Make an Offer' : 'Sign in to Make Offer'}</span>
                       </button>
                     )}
                   </div>
@@ -257,7 +272,13 @@ export const WantedBoardPage: React.FC<WantedBoardPageProps> = ({ onOpenChat }) 
               Looking for a textbook, drafter, lab coat, or scientific calculator? Be the first student to post a request!
             </p>
             <button
-              onClick={() => setCreateModalOpen(true)}
+              onClick={() => {
+                if (!isLoggedIn) {
+                  if (onOpenAuth) onOpenAuth();
+                  return;
+                }
+                setCreateModalOpen(true);
+              }}
               className="mt-2 px-5 py-2.5 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] shadow-[2.5px_2.5px_0px_#1C1C1C] hover:bg-[#e49b2f] cursor-pointer"
             >
               Post a Wanted Request 📌

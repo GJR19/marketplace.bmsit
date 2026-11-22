@@ -8,7 +8,8 @@ interface FooterProps {
 }
 
 export const Footer: React.FC<FooterProps> = ({ setActiveTab, onOpenAuth }) => {
-  const { resetDemoData } = useApp();
+  const { currentUser } = useApp();
+  const isLoggedIn = currentUser.id !== 'guest' && Boolean(currentUser.email) && currentUser.verified;
 
   return (
     <footer className="mt-24 border-t-3 border-[#1C1C1C] bg-[#FFF9E6]">
@@ -66,7 +67,13 @@ export const Footer: React.FC<FooterProps> = ({ setActiveTab, onOpenAuth }) => {
               </li>
               <li>
                 <button
-                  onClick={() => setActiveTab('sell')}
+                  onClick={() => {
+                    if (!isLoggedIn) {
+                      onOpenAuth();
+                      return;
+                    }
+                    setActiveTab('sell');
+                  }}
                   className="hover:text-[#1C1C1C] hover:translate-x-1 transition-transform inline-block"
                 >
                   Sell an Item
@@ -74,7 +81,13 @@ export const Footer: React.FC<FooterProps> = ({ setActiveTab, onOpenAuth }) => {
               </li>
               <li>
                 <button
-                  onClick={() => setActiveTab('dashboard')}
+                  onClick={() => {
+                    if (!isLoggedIn) {
+                      onOpenAuth();
+                      return;
+                    }
+                    setActiveTab('dashboard');
+                  }}
                   className="hover:text-[#1C1C1C] hover:translate-x-1 transition-transform inline-block"
                 >
                   Student Dashboard

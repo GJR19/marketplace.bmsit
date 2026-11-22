@@ -27,6 +27,7 @@ interface ProductDetailModalProps {
   onClose: () => void;
   onOpenChatWithSeller: (product: Product, message?: string) => void;
   onOpenProduct: (product: Product) => void;
+  onOpenAuth?: () => void;
 }
 
 export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
@@ -35,6 +36,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   onClose,
   onOpenChatWithSeller,
   onOpenProduct,
+  onOpenAuth,
 }) => {
   const {
     products,
@@ -44,6 +46,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     pushToast,
     submitReport,
   } = useApp();
+
+  const isLoggedIn = currentUser.id !== 'guest' && Boolean(currentUser.email) && currentUser.verified;
 
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -140,15 +144,17 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             >
               {copied ? <Check className="w-4 h-4 text-emerald-900" /> : <Share2 className="w-4 h-4 text-[#1C1C1C]" />}
             </button>
-            <button
-              onClick={() => toggleWishlist(product.id)}
-              title={wishlisted ? 'Remove from wishlist' : 'Save to wishlist'}
-              className={`p-1.5 rounded-full border border-[#1C1C1C] transition shadow-[1.5px_1.5px_0px_#1C1C1C] ${
-                wishlisted ? 'bg-[#E1467A] text-white' : 'bg-white text-[#1C1C1C] hover:bg-[#FFF9E6]'
-              }`}
-            >
-              <Heart className={`w-4 h-4 ${wishlisted ? 'fill-white' : ''}`} />
-            </button>
+            {isLoggedIn && (
+              <button
+                onClick={() => toggleWishlist(product.id)}
+                title={wishlisted ? 'Remove from wishlist' : 'Save to wishlist'}
+                className={`p-1.5 rounded-full border border-[#1C1C1C] transition shadow-[1.5px_1.5px_0px_#1C1C1C] ${
+                  wishlisted ? 'bg-[#E1467A] text-white' : 'bg-white text-[#1C1C1C] hover:bg-[#FFF9E6]'
+                }`}
+              >
+                <Heart className={`w-4 h-4 ${wishlisted ? 'fill-white' : ''}`} />
+              </button>
+            )}
             <button
               onClick={onClose}
               className="p-1.5 rounded-full border border-[#1C1C1C] bg-[#FFF9E6] hover:bg-[#F2A93B] transition shadow-[1.5px_1.5px_0px_#1C1C1C]"
@@ -324,11 +330,18 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </div>
                 ) : (
                     <button
-                      onClick={() => onOpenChatWithSeller(product)}
+                      onClick={() => {
+                        if (!isLoggedIn) {
+                          onClose();
+                          if (onOpenAuth) onOpenAuth();
+                          return;
+                        }
+                        onOpenChatWithSeller(product);
+                      }}
                       className="w-full py-3 px-4 rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] text-[#1C1C1C] font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-[3px_3px_0px_#1C1C1C] hover:bg-[#e49b2f] active:translate-x-0.5 active:translate-y-0.5 transition cursor-pointer"
                     >
                       <MessageCircle className="w-4 h-4" />
-                      <span>Contact / Chat with Seller</span>
+                      <span>{isLoggedIn ? 'Contact / Chat with Seller' : 'Sign in to Contact / Buy'}</span>
                     </button>
                 )}
 
@@ -337,6 +350,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     <button
                       type="button"
                       onClick={() => {
+                        if (!isLoggedIn) {
+                          onClose();
+                          if (onOpenAuth) onOpenAuth();
+                          return;
+                        }
                         setReportSubmitted(false);
                         setReportModalOpen(true);
                       }}

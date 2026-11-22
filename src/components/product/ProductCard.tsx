@@ -15,7 +15,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   product,
   onOpenDetails,
 }) => {
-  const { toggleWishlist, isWishlisted } = useApp();
+  const { toggleWishlist, isWishlisted, currentUser } = useApp();
+
+  const isLoggedIn = currentUser.id !== 'guest' && Boolean(currentUser.email) && currentUser.verified;
 
   const isSold = product.status === 'sold';
   const isPending = product.status === 'pending_approval';
@@ -67,23 +69,25 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </div>
         )}
 
-        {/* Wishlist toggle */}
-        <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-20">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleWishlist(product.id);
-            }}
-            title={wishlisted ? 'Remove from wishlist' : 'Save to wishlist'}
-            className={`p-1.5 rounded-lg border-1.5 border-[#1C1C1C] transition shadow-[1.5px_1.5px_0px_#1C1C1C] ${
-              wishlisted
-                ? 'bg-[#E1467A] text-white'
-                : 'bg-white/90 text-[#1C1C1C] hover:bg-[#FFF9E6]'
-            }`}
-          >
-            <Heart className={`w-3.5 h-3.5 ${wishlisted ? 'fill-white' : ''}`} />
-          </button>
-        </div>
+        {/* Wishlist toggle - Only visible when signed in */}
+        {isLoggedIn && (
+          <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-20">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleWishlist(product.id);
+              }}
+              title={wishlisted ? 'Remove from wishlist' : 'Save to wishlist'}
+              className={`p-1.5 rounded-lg border-1.5 border-[#1C1C1C] transition shadow-[1.5px_1.5px_0px_#1C1C1C] ${
+                wishlisted
+                  ? 'bg-[#E1467A] text-white'
+                  : 'bg-white/90 text-[#1C1C1C] hover:bg-[#FFF9E6]'
+              }`}
+            >
+              <Heart className={`w-3.5 h-3.5 ${wishlisted ? 'fill-white' : ''}`} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Card Body - Displays ONLY: Category, Posted Date, Product Title, Seller Name, USN, Campus Exchange Spot, Price */}

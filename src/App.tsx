@@ -19,7 +19,9 @@ import { TermsAndRulesPage } from './pages/TermsAndRulesPage';
 import { Product, ProductCategory } from './types';
 
 const MainApp: React.FC = () => {
-  const { startChatWithSeller, products } = useApp();
+  const { currentUser, startChatWithSeller, products } = useApp();
+
+  const isLoggedIn = currentUser.id !== 'guest' && Boolean(currentUser.email) && currentUser.verified;
 
   const [activeTab, setActiveTab] = useState<string>('home');
   const [dashboardTab, setDashboardTab] = useState<'postings' | 'wanted' | 'settings'>('postings');
@@ -37,6 +39,14 @@ const MainApp: React.FC = () => {
       setActiveTab('admin');
     }
   }, []);
+
+  // Guard restricted tabs for guests
+  useEffect(() => {
+    if (!isLoggedIn && ['sell', 'chats', 'wishlist', 'dashboard'].includes(activeTab)) {
+      setActiveTab('home');
+      setAuthModalOpen(true);
+    }
+  }, [activeTab, isLoggedIn]);
 
   // Deep-link direct product opening from shared links
   useEffect(() => {
@@ -62,8 +72,22 @@ const MainApp: React.FC = () => {
     setDetailModalOpen(true);
   };
 
+  // Open Sell Modal / Route with Auth Guard
+  const handleOpenSell = () => {
+    if (!isLoggedIn) {
+      setAuthModalOpen(true);
+      return;
+    }
+    setActiveTab('sell');
+  };
+
   // Open Chat with a Seller directly from a product
   const handleOpenChatWithSeller = (product: Product, initialMessage?: string) => {
+    if (!isLoggedIn) {
+      setDetailModalOpen(false);
+      setAuthModalOpen(true);
+      return;
+    }
     const convId = startChatWithSeller(product, initialMessage);
     setDetailModalOpen(false);
     setActiveChatId(convId);
@@ -77,7 +101,7 @@ const MainApp: React.FC = () => {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenAuth={() => setAuthModalOpen(true)}
-        onOpenSellModal={() => setActiveTab('sell')}
+        onOpenSellModal={handleOpenSell}
         onOpenProduct={handleOpenDetails}
         onSelectDashboardTab={(tab) => {
           setDashboardTab(tab);
@@ -92,7 +116,7 @@ const MainApp: React.FC = () => {
             setActiveTab={setActiveTab}
             onOpenDetails={handleOpenDetails}
             onSelectCategoryFilter={(cat) => setSelectedCategory(cat)}
-            onOpenSellModal={() => setActiveTab('sell')}
+            onOpenSellModal={handleOpenSell}
             onOpenAuth={() => setAuthModalOpen(true)}
           />
         )}
@@ -102,7 +126,7 @@ const MainApp: React.FC = () => {
             selectedCategory={selectedCategory}
             setSelectedCategory={setSelectedCategory}
             onOpenDetails={handleOpenDetails}
-            onOpenSellModal={() => setActiveTab('sell')}
+            onOpenSellModal={handleOpenSell}
             onOpenWantedBoard={() => setActiveTab('wanted')}
           />
         )}
@@ -113,6 +137,7 @@ const MainApp: React.FC = () => {
               if (convId) setActiveChatId(convId);
               setActiveTab('chats');
             }}
+            onOpenAuth={() => setAuthModalOpen(true)}
           />
         )}
 
@@ -142,7 +167,7 @@ const MainApp: React.FC = () => {
           <DashboardPage
             initialTab={dashboardTab}
             onTabChange={setDashboardTab}
-            onOpenSellModal={() => setActiveTab('sell')}
+            onOpenSellModal={handleOpenSell}
             onOpenProduct={handleOpenDetails}
             onOpenAuth={() => setAuthModalOpen(true)}
           />
@@ -179,6 +204,7 @@ const MainApp: React.FC = () => {
         onClose={() => setDetailModalOpen(false)}
         onOpenChatWithSeller={handleOpenChatWithSeller}
         onOpenProduct={handleOpenDetails}
+        onOpenAuth={() => setAuthModalOpen(true)}
       />
     </div>
   );
