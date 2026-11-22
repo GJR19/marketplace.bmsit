@@ -176,74 +176,94 @@ export const WantedBoardPage: React.FC<WantedBoardPageProps> = ({ onOpenChat }) 
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredRequests.map((req: WantedRequest) => {
-            const isOwner = currentUser.id === req.studentId;
+        {filteredRequests.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filteredRequests.map((req: WantedRequest) => {
+              const isOwner = currentUser.id === req.studentId;
 
-            return (
-              <div
-                key={req.id}
-                className="p-5 rounded-2xl border-2 border-[#1C1C1C] bg-white flex flex-col justify-between shadow-[4px_4px_0px_#1C1C1C] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[5.5px_5.5px_0px_#1C1C1C] transition-all duration-200"
-              >
-                <div className="space-y-3">
-                  {/* Category Pill and Posted Date */}
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#1C1C1C] bg-[#FFE082] px-2.5 py-1 rounded-md border border-[#1C1C1C] shadow-[1px_1px_0px_#1C1C1C]">
-                      {req.category}
-                    </span>
+              return (
+                <div
+                  key={req.id}
+                  className="p-5 rounded-2xl border-2 border-[#1C1C1C] bg-white flex flex-col justify-between shadow-[4px_4px_0px_#1C1C1C] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[5.5px_5.5px_0px_#1C1C1C] transition-all duration-200"
+                >
+                  <div className="space-y-3">
+                    {/* Category Pill and Posted Date */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#1C1C1C] bg-[#FFE082] px-2.5 py-1 rounded-md border border-[#1C1C1C] shadow-[1px_1px_0px_#1C1C1C]">
+                        {req.category}
+                      </span>
 
-                    <span className="text-[11px] font-mono text-neutral-500 flex items-center gap-1">
-                      <Calendar className="w-3 h-3 text-neutral-400" />
-                      <span>{req.postedDate}</span>
-                    </span>
-                  </div>
-
-                  {/* Product Details: Title */}
-                  <h3 className="font-head font-extrabold text-lg sm:text-xl text-[#1C1C1C] leading-snug">
-                    {req.title}
-                  </h3>
-
-                  {/* Product Details: Description */}
-                  {req.description && (
-                    <p className="text-xs text-neutral-700 bg-[#FFFBEA] p-3 rounded-xl border border-[#1C1C1C]/15 leading-relaxed">
-                      {req.description}
-                    </p>
-                  )}
-
-                  {/* User Details */}
-                  <div className="flex items-center gap-2.5 pt-2 border-t border-[#1C1C1C]/15 text-xs">
-                    <div className="w-8 h-8 rounded-full bg-[#FFE082] border border-[#1C1C1C] flex items-center justify-center font-bold text-xs shrink-0 shadow-[1px_1px_0px_#1C1C1C]">
-                      <User className="w-4 h-4 text-[#1C1C1C]" />
+                      <span className="text-[11px] font-mono text-neutral-500 flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-neutral-400" />
+                        <span>{req.postedDate}</span>
+                      </span>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-bold text-[#1C1C1C] truncate">{req.studentName}</div>
-                      <div className="text-[10px] text-neutral-600 truncate font-mono">
-                        USN: {req.studentUSN}
+
+                    {/* Product Details: Title */}
+                    <h3 className="font-head font-extrabold text-lg sm:text-xl text-[#1C1C1C] leading-snug">
+                      {req.title}
+                    </h3>
+
+                    {/* Product Details: Description */}
+                    {req.description && (
+                      <p className="text-xs text-neutral-700 bg-[#FFFBEA] p-3 rounded-xl border border-[#1C1C1C]/15 leading-relaxed">
+                        {req.description}
+                      </p>
+                    )}
+
+                    {/* User Details */}
+                    <div className="flex items-center gap-2.5 pt-2 border-t border-[#1C1C1C]/15 text-xs">
+                      <div className="w-8 h-8 rounded-full bg-[#FFE082] border border-[#1C1C1C] flex items-center justify-center font-bold text-xs shrink-0 shadow-[1px_1px_0px_#1C1C1C]">
+                        <User className="w-4 h-4 text-[#1C1C1C]" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-[#1C1C1C] truncate">{req.studentName}</div>
+                        <div className="text-[10px] text-neutral-600 truncate font-mono">
+                          USN: {req.studentUSN}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Direct Chat Action */}
-                <div className="pt-4 border-t border-neutral-100 mt-4">
-                  {isOwner ? (
-                    <div className="text-center py-2 text-xs font-bold text-neutral-600 bg-neutral-100 rounded-xl border border-neutral-300">
-                      Posted by You
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => handleStartChat(req)}
-                      className="w-full py-2.5 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] shadow-[3px_3px_0px_#1C1C1C] hover:bg-[#e49b2f] active:translate-x-0.5 active:translate-y-0.5 transition flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <Tag className="w-4 h-4 text-[#1C1C1C]" />
-                      <span>Make an Offer</span>
-                    </button>
-                  )}
+                  {/* Direct Chat Action */}
+                  <div className="pt-4 border-t border-neutral-100 mt-4">
+                    {isOwner ? (
+                      <div className="text-center py-2 text-xs font-bold text-neutral-600 bg-neutral-100 rounded-xl border border-neutral-300">
+                        Posted by You
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleStartChat(req)}
+                        className="w-full py-2.5 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] shadow-[3px_3px_0px_#1C1C1C] hover:bg-[#e49b2f] active:translate-x-0.5 active:translate-y-0.5 transition flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <Tag className="w-4 h-4 text-[#1C1C1C]" />
+                        <span>Make an Offer</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="p-12 text-center bg-white rounded-3xl border-3 border-[#1C1C1C] shadow-[5px_5px_0px_#1C1C1C] space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-[#FFF9E6] border-2 border-[#1C1C1C] flex items-center justify-center text-3xl mx-auto shadow-[2px_2px_0px_#1C1C1C]">
+              📌
+            </div>
+            <h3 className="font-head text-2xl font-bold text-[#1C1C1C]">
+              No Wanted Requests on the Board Yet
+            </h3>
+            <p className="text-xs sm:text-sm text-neutral-600 max-w-md mx-auto leading-relaxed">
+              Looking for a textbook, drafter, lab coat, or scientific calculator? Be the first student to post a request!
+            </p>
+            <button
+              onClick={() => setCreateModalOpen(true)}
+              className="mt-2 px-5 py-2.5 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] shadow-[2.5px_2.5px_0px_#1C1C1C] hover:bg-[#e49b2f] cursor-pointer"
+            >
+              Post a Wanted Request 📌
+            </button>
+          </div>
+        )}
       </div>
 
       {/* CREATE WANTED REQUEST MODAL (No Budget, No Needed by Date) */}

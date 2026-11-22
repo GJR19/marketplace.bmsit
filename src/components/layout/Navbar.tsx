@@ -19,6 +19,7 @@ import {
   Check,
   Package,
   Settings,
+  LogOut,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Product } from '../../types';
@@ -50,6 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     markNotificationAsRead,
     markAllNotificationsAsRead,
     resetDemoData,
+    logoutUser,
     products,
   } = useApp();
 
@@ -318,32 +320,42 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
 
-          {/* Merged My Account & Profile Pill */}
+          {/* Merged My Account & Profile Pill / Sign In button */}
           <div className="relative">
-            <button
-              onClick={() => {
-                setUserMenuOpen(!userMenuOpen);
-                setNotifDropdownOpen(false);
-              }}
-              className={`flex items-center gap-2 pl-2 pr-3 py-2 rounded-xl border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] transition cursor-pointer ${
-                activeTab === 'dashboard'
-                  ? 'bg-[#F2A93B] text-[#1C1C1C]'
-                  : 'bg-white text-[#1C1C1C] hover:bg-[#FFE082]'
-              }`}
-            >
-              <img
-                src={currentUser.avatar}
-                alt={currentUser.name}
-                className="w-6 h-6 rounded-lg border border-[#1C1C1C] object-cover"
-              />
-              <span className="text-xs sm:text-sm font-extrabold text-[#1C1C1C]">
-                My Account
-              </span>
-              <span className="text-xs font-semibold text-neutral-600 hidden sm:inline">
-                ({currentUser.name.split(' ')[0]})
-              </span>
-              <ChevronDown className="w-3.5 h-3.5 text-[#1C1C1C]/70" />
-            </button>
+            {currentUser.id === 'guest' || !currentUser.email ? (
+              <button
+                onClick={onOpenAuth}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] text-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#e49b2f] transition font-bold text-xs sm:text-sm cursor-pointer"
+              >
+                <User className="w-4 h-4" />
+                <span>Sign In / Register</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setUserMenuOpen(!userMenuOpen);
+                  setNotifDropdownOpen(false);
+                }}
+                className={`flex items-center gap-2 pl-2 pr-3 py-2 rounded-xl border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] transition cursor-pointer ${
+                  activeTab === 'dashboard'
+                    ? 'bg-[#F2A93B] text-[#1C1C1C]'
+                    : 'bg-white text-[#1C1C1C] hover:bg-[#FFE082]'
+                }`}
+              >
+                <img
+                  src={currentUser.avatar}
+                  alt={currentUser.name}
+                  className="w-6 h-6 rounded-lg border border-[#1C1C1C] object-cover"
+                />
+                <span className="text-xs sm:text-sm font-extrabold text-[#1C1C1C]">
+                  My Account
+                </span>
+                <span className="text-xs font-semibold text-neutral-600 hidden sm:inline">
+                  ({currentUser.name.split(' ')[0]})
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-[#1C1C1C]/70" />
+              </button>
+            )}
 
             {/* User Dropdown Menu */}
             {userMenuOpen && (
@@ -416,21 +428,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <div className="pt-2 mt-2 border-t border-[#1C1C1C]/15 flex items-center justify-between text-[11px]">
                     <button
                       onClick={() => {
-                        onOpenAuth();
+                        logoutUser();
                         setUserMenuOpen(false);
                       }}
-                      className="font-semibold text-neutral-600 hover:text-[#1C1C1C] cursor-pointer"
+                      className="font-bold text-[#E1467A] hover:underline cursor-pointer flex items-center gap-1.5"
                     >
-                      Switch Student
-                    </button>
-                    <button
-                      onClick={() => {
-                        resetDemoData();
-                        setUserMenuOpen(false);
-                      }}
-                      className="font-bold text-[#E1467A] hover:underline cursor-pointer"
-                    >
-                      Reset Data
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Sign Out</span>
                     </button>
                   </div>
                 </div>
@@ -491,19 +495,32 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           <div className="pt-3 border-t border-[#1C1C1C]/20 flex items-center justify-between text-xs">
-            <span className="font-mono text-neutral-600 font-bold">
-              Signed in: {currentUser.name}
-            </span>
-
-            <button
-              onClick={() => {
-                onOpenAuth();
-                setMobileMenuOpen(false);
-              }}
-              className="text-[#E1467A] font-bold hover:underline"
-            >
-              Change Persona
-            </button>
+            {currentUser.id !== 'guest' && currentUser.email ? (
+              <>
+                <span className="font-mono text-neutral-600 font-bold truncate max-w-[200px]">
+                  {currentUser.name} ({currentUser.usn})
+                </span>
+                <button
+                  onClick={() => {
+                    logoutUser();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="text-[#E1467A] font-bold hover:underline shrink-0"
+                >
+                  Sign Out
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => {
+                  onOpenAuth();
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full py-2.5 bg-[#F2A93B] font-bold text-center rounded-xl border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C]"
+              >
+                Sign In / Register with @bmsit.in
+              </button>
+            )}
           </div>
         </div>
       )}

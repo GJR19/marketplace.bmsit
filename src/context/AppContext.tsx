@@ -13,6 +13,7 @@ import {
   ProductCategory,
 } from '../types';
 import {
+  GUEST_STUDENT,
   INITIAL_PRODUCTS,
   INITIAL_STUDENTS,
   INITIAL_WANTED_REQUESTS,
@@ -109,69 +110,49 @@ interface AppContextType {
 }
 
 const STORAGE_KEYS = {
-  PRODUCTS: 'marketplace_bmsit_products_v3',
-  STUDENTS: 'marketplace_bmsit_students_v2',
-  CURRENT_USER: 'marketplace_bmsit_current_user_v2',
-  WISHLIST: 'marketplace_bmsit_wishlist_v2',
-  WANTED: 'marketplace_bmsit_wanted_v2',
-  CHATS: 'marketplace_bmsit_chats_v3',
-  NOTIFICATIONS: 'marketplace_bmsit_notifs_v2',
-  REPORTS: 'marketplace_bmsit_reports_v2',
-  LOGS: 'marketplace_bmsit_logs_v2',
+  PRODUCTS: 'marketplace_bmsit_products_v4',
+  STUDENTS: 'marketplace_bmsit_students_v4',
+  CURRENT_USER: 'marketplace_bmsit_current_user_v4',
+  WISHLIST: 'marketplace_bmsit_wishlist_v4',
+  WANTED: 'marketplace_bmsit_wanted_v4',
+  CHATS: 'marketplace_bmsit_chats_v4',
+  NOTIFICATIONS: 'marketplace_bmsit_notifs_v4',
+  REPORTS: 'marketplace_bmsit_reports_v4',
+  LOGS: 'marketplace_bmsit_logs_v4',
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-    if (saved) {
-      try {
-        const parsed: Product[] = JSON.parse(saved);
-        return parsed.map((p) => ({
-          ...p,
-          handoverLocation: normalizeCampusLocation(p.handoverLocation),
-        }));
-      } catch {
-        return INITIAL_PRODUCTS;
-      }
-    }
-    return INITIAL_PRODUCTS;
-  });
+  const [products, setProducts] = useState<Product[]>([]);
 
-  const [students, setStudents] = useState<Student[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.STUDENTS);
-    return saved ? JSON.parse(saved) : INITIAL_STUDENTS;
-  });
+  const [students, setStudents] = useState<Student[]>([]);
 
   const [currentUser, setCurrentUserState] = useState<Student>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
     if (saved) {
-      const parsed = JSON.parse(saved);
-      const found = INITIAL_STUDENTS.find((s) => s.id === parsed.id);
-      return found || parsed;
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.id && parsed.id !== 'guest') {
+          return parsed;
+        }
+      } catch {}
     }
-    return INITIAL_STUDENTS[0]; // Default Rohan Sharma (1BY24AI049)
+    return GUEST_STUDENT;
   });
 
   const [isAdminMode, setIsAdminMode] = useState<boolean>(currentUser.role === 'admin');
 
   const [wishlist, setWishlist] = useState<string[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.WISHLIST);
-    return saved ? JSON.parse(saved) : ['prod-2', 'prod-5'];
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [compareList, setCompareList] = useState<string[]>([]);
 
-  const [wantedRequests, setWantedRequests] = useState<WantedRequest[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.WANTED);
-    return saved ? JSON.parse(saved) : INITIAL_WANTED_REQUESTS;
-  });
+  const [wantedRequests, setWantedRequests] = useState<WantedRequest[]>([]);
 
-  const [allChats, setAllChats] = useState<ChatConversation[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.CHATS);
-    return saved ? JSON.parse(saved) : INITIAL_CHATS;
-  });
+  const [allChats, setAllChats] = useState<ChatConversation[]>([]);
 
   const conversationIdMap = useRef<Record<string, string>>({});
 
@@ -185,20 +166,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   }, [allChats, currentUser.id]);
 
-  const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
-    return saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
-  });
-
-  const [reports, setReports] = useState<ModerationReport[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.REPORTS);
-    return saved ? JSON.parse(saved) : INITIAL_REPORTS;
-  });
-
-  const [adminLogs, setAdminLogs] = useState<AdminLog[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.LOGS);
-    return saved ? JSON.parse(saved) : INITIAL_ADMIN_LOGS;
-  });
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [reports, setReports] = useState<ModerationReport[]>([]);
+  const [adminLogs, setAdminLogs] = useState<AdminLog[]>([]);
 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -313,7 +283,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
       } else if (event === 'SIGNED_OUT') {
-        setCurrentUserState(INITIAL_STUDENTS[0]);
+        setCurrentUserState(GUEST_STUDENT);
         setIsAdminMode(false);
       }
     });
@@ -357,7 +327,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         `)
         .order('created_at', { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         const live: Product[] = data.map((row: any) => ({
           id: row.id,
           title: row.title,
@@ -384,11 +354,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           rejectionReason: row.rejection_reason || undefined,
         }));
 
-        setProducts((prev) => {
-          const liveIds = new Set(live.map((p) => p.id));
-          const mock = prev.filter((p) => !liveIds.has(p.id));
-          return [...live, ...mock];
-        });
+        setProducts(live);
       }
     } catch (err) {
       console.warn('Failed to fetch products from Supabase:', err);
@@ -419,7 +385,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         `)
         .order('created_at', { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         const liveReqs: WantedRequest[] = data.map((row: any) => ({
           id: row.id,
           title: row.title,
@@ -436,11 +402,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           postedDate: row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
         }));
 
-        setWantedRequests((prev) => {
-          const liveIds = new Set(liveReqs.map((r) => r.id));
-          const retained = prev.filter((r) => !liveIds.has(r.id));
-          return [...liveReqs, ...retained];
-        });
+        setWantedRequests(liveReqs);
       }
     } catch (err) {
       console.warn('Failed to fetch wanted requests from Supabase:', err);
@@ -454,7 +416,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         const liveReports: ModerationReport[] = data.map((r: any) => ({
           id: r.id,
           targetType: r.target_type,
@@ -468,14 +430,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           timestamp: new Date(r.created_at).toLocaleString(),
         }));
 
-        setReports((prev) => {
-          const liveIds = new Set(liveReports.map((item) => item.id));
-          const retained = prev.filter((item) => !liveIds.has(item.id));
-          return [...liveReports, ...retained];
-        });
+        setReports(liveReports);
       }
     } catch (err) {
       console.warn('Failed to fetch reports from Supabase:', err);
+    }
+  };
+
+  const loadLiveStudents = async () => {
+    try {
+      const { data, error } = await supabase.from('profiles').select('*');
+      if (!error && data) {
+        setStudents(data.map((p: any) => profileToStudent(p)));
+      }
+    } catch (err) {
+      console.warn('Failed to fetch students from Supabase:', err);
     }
   };
 
@@ -483,6 +452,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loadLiveProducts();
     loadLiveWantedRequests();
     loadLiveReports();
+    loadLiveStudents();
   }, []);
 
   // Supabase User Notifications Hydration & Realtime Channel
@@ -1739,52 +1709,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const logoutUser = async () => {
     await supabase.auth.signOut();
     localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
-    setCurrentUserState(INITIAL_STUDENTS[0]);
+    setCurrentUserState(GUEST_STUDENT);
     setIsAdminMode(false);
     pushToast('Signed out of BMSIT Marketplace.', 'info');
   };
 
   const toggleAdminMode = () => {
     if (!isAdminMode) {
-      // Find admin user or elevate
-      const adminAcc = students.find((s) => s.role === 'admin') || INITIAL_STUDENTS[11];
-      setCurrentUserState(adminAcc);
-      setIsAdminMode(true);
-      pushToast('Switched to BMSIT Moderator Admin Mode 🛡️', 'info');
+      const adminAcc = students.find((s) => s.role === 'admin');
+      if (adminAcc) {
+        setCurrentUserState(adminAcc);
+        setIsAdminMode(true);
+        pushToast('Switched to BMSIT Moderator Admin Mode 🛡️', 'info');
+      } else {
+        window.location.href = '/ishowspeed';
+      }
     } else {
-      // Switch back to student
-      const studentAcc = students.find((s) => s.role === 'student') || INITIAL_STUDENTS[0];
-      setCurrentUserState(studentAcc);
+      setCurrentUserState(GUEST_STUDENT);
       setIsAdminMode(false);
       pushToast('Switched to Student Mode 🎓', 'info');
     }
   };
 
-  // Reset Demo Data
+  // Reset / Clear Local Data
   const resetDemoData = () => {
-    localStorage.removeItem(STORAGE_KEYS.PRODUCTS);
-    localStorage.removeItem(STORAGE_KEYS.STUDENTS);
-    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
-    localStorage.removeItem(STORAGE_KEYS.WISHLIST);
-    localStorage.removeItem(STORAGE_KEYS.WANTED);
-    localStorage.removeItem(STORAGE_KEYS.CHATS);
-    localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
-    localStorage.removeItem(STORAGE_KEYS.REPORTS);
-    localStorage.removeItem(STORAGE_KEYS.LOGS);
-
-    setProducts(INITIAL_PRODUCTS);
-    setStudents(INITIAL_STUDENTS);
-    setCurrentUserState(INITIAL_STUDENTS[0]);
+    Object.values(STORAGE_KEYS).forEach((k) => localStorage.removeItem(k));
+    setProducts([]);
+    setStudents([]);
+    setCurrentUserState(GUEST_STUDENT);
     setIsAdminMode(false);
-    setWishlist(['prod-2', 'prod-5']);
+    setWishlist([]);
     setCompareList([]);
-    setWantedRequests(INITIAL_WANTED_REQUESTS);
-    setAllChats(INITIAL_CHATS);
-    setNotifications(INITIAL_NOTIFICATIONS);
-    setReports(INITIAL_REPORTS);
-    setAdminLogs(INITIAL_ADMIN_LOGS);
-
-    pushToast('Demo data restored to initial campus state! 🔄', 'success');
+    setWantedRequests([]);
+    setAllChats([]);
+    setNotifications([]);
+    setReports([]);
+    setAdminLogs([]);
+    pushToast('Cleared local cached data.', 'info');
   };
 
   return (
