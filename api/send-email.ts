@@ -38,7 +38,7 @@ export default async function handler(req: any, res: any) {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        from: 'BMSIT Marketplace <onboarding@resend.dev>',
+        from: 'BMSIT Marketplace <noreply@marketplace.bmsit.co.in>',
         to: Array.isArray(to) ? to : [to],
         subject,
         html,
