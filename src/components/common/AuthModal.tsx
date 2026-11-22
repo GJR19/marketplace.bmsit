@@ -61,6 +61,51 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSubmitted, setForgotSubmitted] = useState(false);
 
+  // Clear Sign-In fields
+  const resetSignInForm = () => {
+    setSignInEmail('');
+    setSignInPassword('');
+    setSignInError(null);
+  };
+
+  // Clear Register fields
+  const resetRegisterForm = () => {
+    setFullName('');
+    setEmail('');
+    setUsnInput('');
+    setPassword('');
+    setConfirmPassword('');
+    setManualBranch('');
+    setUsnResult(null);
+  };
+
+  // Switch between tabs and clear previous entered info
+  const switchToSignIn = () => {
+    resetSignInForm();
+    resetRegisterForm();
+    setMode('signin');
+  };
+
+  const switchToRegister = () => {
+    resetSignInForm();
+    resetRegisterForm();
+    setMode('register');
+  };
+
+  // Reset forms whenever modal opens or closes
+  useEffect(() => {
+    if (isOpen) {
+      resetSignInForm();
+      resetRegisterForm();
+      setEnteredOtp('');
+      setPendingEmail('');
+      setPendingData(null);
+      setForgotEmail('');
+      setForgotSubmitted(false);
+      setMode(initialMode);
+    }
+  }, [isOpen, initialMode]);
+
   // Timer countdown for Resend OTP
   useEffect(() => {
     if (resendCooldown > 0) {
@@ -439,10 +484,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div className="grid grid-cols-2 p-1 bg-[#FFF9E6] rounded-xl border-2 border-[#1C1C1C] mb-5 shadow-[2px_2px_0px_#1C1C1C]">
             <button
               type="button"
-              onClick={() => {
-                setSignInError(null);
-                setMode('signin');
-              }}
+              onClick={switchToSignIn}
               className={`py-2 text-xs font-bold rounded-lg transition ${
                 mode === 'signin'
                   ? 'bg-[#1C1C1C] text-[#FFFBEA]'
@@ -453,10 +495,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setSignInError(null);
-                setMode('register');
-              }}
+              onClick={switchToRegister}
               className={`py-2 text-xs font-bold rounded-lg transition ${
                 mode === 'register'
                   ? 'bg-[#1C1C1C] text-[#FFFBEA]'
@@ -530,10 +569,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      setSignInError(null);
-                      setMode('register');
-                    }}
+                    onClick={switchToRegister}
                     className="text-[11px] underline font-extrabold text-rose-700 hover:text-rose-900 shrink-0 cursor-pointer"
                   >
                     Register →
@@ -814,7 +850,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   type="button"
                   onClick={() => {
                     setForgotSubmitted(false);
-                    setMode('signin');
+                    switchToSignIn();
                   }}
                   className="mt-2 px-3 py-1 bg-[#F2A93B] border border-[#1C1C1C] rounded-lg font-bold cursor-pointer"
                 >
@@ -836,7 +872,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="flex items-center justify-between pt-2">
                   <button
                     type="button"
-                    onClick={() => setMode('signin')}
+                    onClick={switchToSignIn}
                     className="text-xs text-neutral-500 hover:underline cursor-pointer"
                   >
                     Back to Sign In
