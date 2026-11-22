@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   Shield,
@@ -9,6 +9,7 @@ import {
   Package,
   Flag,
   RotateCcw,
+  RotateCw,
   Search,
   ExternalLink,
   Lock,
@@ -22,7 +23,7 @@ import {
   MapPin,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { Product, Student } from '../types';
+import { Product, Student, ProductCategory, ListingStatus } from '../types';
 import { ConfirmModal } from '../components/common/ConfirmModal';
 import { formatPriceINR } from '../utils/usnParser';
 
@@ -126,16 +127,90 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     pushToast('Admin logged out successfully.', 'info');
   };
 
+  // Live Supabase Admin Data
+  const [dbProducts, setDbProducts] = useState<Product[]>([]);
+  const [dbUsers, setDbUsers] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchAdminData = async () => {
+    setRefreshing(true);
+    try {
+      // 1. Fetch live products from admin RPC
+      const { data: prodData, error: prodErr } = await supabase.rpc('admin_get_all_products');
+      if (!prodErr && prodData && prodData.length > 0) {
+        const mapped: Product[] = prodData.map((row: any) => ({
+          id: row.id,
+          title: row.title,
+          category: row.category as ProductCategory,
+          description: row.description,
+          price: Number(row.price),
+          originalPrice: row.original_price ? Number(row.original_price) : undefined,
+          condition: row.condition,
+          images: Array.isArray(row.images) ? row.images : [],
+          sellerId: row.seller_id,
+          sellerName: row.seller_name || 'BMSIT Student',
+          sellerUSN: row.seller_usn || '1BY24XX000',
+          sellerBranch: row.seller_branch || 'Engineering',
+          sellerAdmissionYear: 2024,
+          sellerCurrentYear: 'Student',
+          sellerAvatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${row.seller_usn || row.seller_id}`,
+          status: row.status === 'pending' ? 'pending_approval' : (row.status as ListingStatus),
+          handoverLocation: row.location || 'Campus Main Gate',
+          contactPreference: row.meet_preferences || 'In-app Chat',
+          postedDate: row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+          updatedDate: row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+          rejectionReason: row.rejection_reason || undefined,
+        }));
+        setDbProducts(mapped);
+      }
+
+      // 2. Fetch live users from admin RPC
+      const { data: userData, error: userErr } = await supabase.rpc('admin_get_all_users');
+      if (!userErr && userData && userData.length > 0) {
+        setDbUsers(userData);
+      }
+    } catch (e) {
+      console.warn('Error loading admin data:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdminAuthenticated) {
+      fetchAdminData();
+    }
+  }, [isAdminAuthenticated]);
+
+  // Combined Live & Fallback Collections
+  const currentProducts = dbProducts.length > 0 ? dbProducts : products;
+  const currentStudents: Student[] = dbUsers.length > 0
+    ? dbUsers.map((u: any) => ({
+        id: u.id,
+        name: u.full_name || 'Student',
+        email: u.college_email || '',
+        usn: u.usn || '',
+        branch: u.branch || 'Engineering',
+        admissionYear: Number(u.admission_year) || 2024,
+        currentYear: u.current_year || 'Student',
+        avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${u.usn || u.id}`,
+        role: 'student' as const,
+        verified: Boolean(u.is_verified),
+        status: (u.is_suspended ? 'suspended' : 'active') as 'suspended' | 'active',
+        phone: u.phone || '',
+      }))
+    : students;
+
   // Statistics
-  const pendingCount = products.filter((p) => p.status === 'pending_approval').length;
-  const approvedCount = products.filter((p) => p.status === 'approved').length;
-  const rejectedCount = products.filter((p) => p.status === 'rejected').length;
-  const soldCount = products.filter((p) => p.status === 'sold').length;
-  const suspendedCount = students.filter((s) => s.status === 'suspended').length;
+  const pendingCount = currentProducts.filter((p) => p.status === 'pending_approval').length;
+  const approvedCount = currentProducts.filter((p) => p.status === 'approved').length;
+  const rejectedCount = currentProducts.filter((p) => p.status === 'rejected').length;
+  const soldCount = currentProducts.filter((p) => p.status === 'sold').length;
+  const suspendedCount = currentStudents.filter((s) => s.status === 'suspended').length;
   const openReportsCount = reports.filter((r) => r.status === 'open' || r.status === 'investigating').length;
 
   // Filtered Listings Queue
-  const filteredQueue = products.filter((p) => {
+  const filteredQueue = currentProducts.filter((p) => {
     if (queueFilter !== 'all' && p.status !== queueFilter) {
       return false;
     }
@@ -150,7 +225,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   });
 
   // Filtered Users
-  const filteredStudents = students.filter((s) => {
+  const filteredStudents = currentStudents.filter((s) => {
     if (!userSearch.trim()) return true;
     const q = userSearch.toLowerCase();
     return (
@@ -173,7 +248,21 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     if (!productToReject) return;
 
     rejectProduct(productToReject.id, rejectionReason, adminNotes);
+    setDbProducts((prev) =>
+      prev.map((p) =>
+        p.id === productToReject.id
+          ? { ...p, status: 'rejected', rejectionReason: rejectionReason + (adminNotes ? ` (${adminNotes})` : '') }
+          : p
+      )
+    );
     setRejectModalOpen(false);
+  };
+
+  const handleApproveListing = (id: string) => {
+    approveProduct(id);
+    setDbProducts((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, status: 'approved', rejectionReason: undefined } : p))
+    );
   };
 
   if (!isAdminAuthenticated) {
@@ -283,10 +372,19 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="nb-sticker text-xs bg-emerald-100 text-emerald-900 border border-emerald-800">
             ✓ Super Admin Active
           </div>
+          <button
+            onClick={fetchAdminData}
+            disabled={refreshing}
+            className="px-4 py-2.5 rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] hover:bg-[#e49b2f] text-[#1C1C1C] font-bold text-xs shadow-[2px_2px_0px_#1C1C1C] transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            title="Reload real-time listings and users from Supabase"
+          >
+            <RotateCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            <span>{refreshing ? 'Refreshing...' : 'Refresh Live Data'}</span>
+          </button>
           <button
             onClick={handleAdminLogout}
             className="px-4 py-2.5 rounded-xl border-2 border-[#1C1C1C] bg-white hover:bg-neutral-100 text-neutral-800 font-bold text-xs shadow-[2px_2px_0px_#1C1C1C] transition flex items-center gap-1.5 cursor-pointer"
@@ -483,7 +581,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                       {isPending ? (
                         <>
                           <button
-                            onClick={() => approveProduct(p.id)}
+                            onClick={() => handleApproveListing(p.id)}
                             className="px-4 py-1.5 text-xs font-bold rounded-lg border-2 border-[#1C1C1C] bg-[#F2A93B] shadow-[1.5px_1.5px_0px_#1C1C1C] hover:bg-[#e49b2f] transition flex items-center gap-1"
                           >
                             <Check className="w-4 h-4" />
@@ -501,7 +599,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                       ) : (
                         p.status !== 'approved' && (
                           <button
-                            onClick={() => approveProduct(p.id)}
+                            onClick={() => handleApproveListing(p.id)}
                             className="px-3 py-1.5 text-xs font-bold rounded-lg border border-[#1C1C1C] bg-white hover:bg-[#FFF9E6]"
                           >
                             Approve Listing
@@ -563,7 +661,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                 <tbody className="divide-y divide-neutral-100 font-medium">
                   {filteredStudents.map((s) => {
                     const isSuspended = s.status === 'suspended';
-                    const userListingsCount = products.filter((p) => p.sellerId === s.id).length;
+                    const userListingsCount = currentProducts.filter((p) => p.sellerId === s.id).length;
 
                     return (
                       <tr key={s.id} className="hover:bg-[#FFF9E6]/50">

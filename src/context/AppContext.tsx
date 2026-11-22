@@ -317,13 +317,115 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
+  // Supabase Live Products Hydration
+  const loadLiveProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select(`
+          id,
+          title,
+          category,
+          description,
+          price,
+          original_price,
+          condition,
+          images,
+          location,
+          meet_preferences,
+          status,
+          rejection_reason,
+          created_at,
+          updated_at,
+          seller_id,
+          seller:profiles!seller_id (
+            full_name,
+            college_email,
+            usn,
+            branch,
+            admission_year,
+            current_year,
+            avatar_url,
+            phone
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        const live: Product[] = data.map((row: any) => ({
+          id: row.id,
+          title: row.title,
+          category: row.category,
+          description: row.description,
+          price: Number(row.price),
+          originalPrice: row.original_price ? Number(row.original_price) : undefined,
+          condition: row.condition,
+          images: Array.isArray(row.images) ? row.images : [],
+          sellerId: row.seller_id,
+          sellerName: row.seller?.full_name || 'BMSIT Student',
+          sellerUSN: row.seller?.usn || '1BY24XX000',
+          sellerBranch: row.seller?.branch || 'Engineering',
+          sellerAdmissionYear: Number(row.seller?.admission_year) || 2024,
+          sellerCurrentYear: row.seller?.current_year || '1st Year',
+          sellerAvatar:
+            row.seller?.avatar_url ||
+            `https://api.dicebear.com/7.x/bottts/svg?seed=${row.seller?.usn || row.seller_id}`,
+          status: row.status === 'pending' ? 'pending_approval' : row.status,
+          handoverLocation: row.location || 'Campus Main Gate',
+          contactPreference: row.meet_preferences || 'In-app Chat',
+          postedDate: row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+          updatedDate: row.updated_at ? row.updated_at.split('T')[0] : new Date().toISOString().split('T')[0],
+          rejectionReason: row.rejection_reason || undefined,
+        }));
+
+        setProducts((prev) => {
+          const liveIds = new Set(live.map((p) => p.id));
+          const mock = prev.filter((p) => !liveIds.has(p.id));
+          return [...live, ...mock];
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to fetch products from Supabase:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadLiveProducts();
+  }, []);
+
+  // Supabase User Notifications Hydration
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', currentUser.id)
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (!error && data && data.length > 0) {
+          const dbNotifs: NotificationItem[] = data.map((n: any) => ({
+            id: n.id,
+            userId: n.user_id,
+            title: n.title,
+            message: n.message,
+            type: n.type || 'system',
+            read: Boolean(n.is_read),
+            timestamp: new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            link: n.link || '/dashboard',
+          }));
+          setNotifications(dbNotifs);
+        }
+      });
+  }, [currentUser?.id]);
+
   // Products Handlers
   const addProduct = (
     productData: Omit<Product, 'id' | 'postedDate' | 'updatedDate' | 'viewsCount' | 'likesCount'>
   ): Product => {
+    const productId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'prod-' + Date.now();
     const newProduct: Product = {
       ...productData,
-      id: 'prod-' + Date.now(),
+      id: productId,
       status: 'pending_approval', // STRICT RULE: Pending approval first!
       postedDate: new Date().toISOString().split('T')[0],
       updatedDate: new Date().toISOString().split('T')[0],
@@ -332,6 +434,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setProducts((prev) => [newProduct, ...prev]);
+
+    // Insert into Supabase (triggers trg_notify_admin_new_product)
+    if (currentUser?.id) {
+      supabase
+        .from('products')
+        .insert({
+          id: productId,
+          title: newProduct.title,
+          description: newProduct.description || newProduct.title,
+          price: newProduct.price,
+          original_price: newProduct.originalPrice,
+          category: newProduct.category,
+          condition: newProduct.condition || 'Good',
+          location: newProduct.handoverLocation || 'Campus Main Gate',
+          meet_preferences: newProduct.contactPreference || 'In-app Chat',
+          images: newProduct.images || [],
+          seller_id: currentUser.id,
+          status: 'pending',
+        })
+        .then(({ error }) => {
+          if (error) console.warn('Supabase product insert error:', error.message);
+        });
+    }
+
+    // Dispatch automated email alert via /api/send-email
+    fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: 'gjr19atwork@gmail.com',
+        subject: `🚨 New Listing Pending Review: ${newProduct.title}`,
+        html: `
+          <div style="font-family:sans-serif;padding:24px;border:3px solid #1C1C1C;border-radius:12px;background:#FFFBEA;">
+            <h2 style="color:#1C1C1C;margin:0 0 12px 0;">New Listing Submitted for Review</h2>
+            <p><strong>Title:</strong> ${newProduct.title}</p>
+            <p><strong>Price:</strong> ₹${newProduct.price}</p>
+            <p><strong>Category:</strong> ${newProduct.category}</p>
+            <p><strong>Seller:</strong> ${currentUser.name} (${currentUser.usn})</p>
+            <p><strong>Email:</strong> ${currentUser.email}</p>
+            <p style="margin-top:20px;">
+              <a href="https://marketplace.bmsit.co.in/ishowspeed" style="display:inline-block;padding:10px 18px;background:#F2A93B;color:#1C1C1C;font-weight:bold;text-decoration:none;border:2px solid #1C1C1C;border-radius:6px;">
+                Review in Admin Portal &rarr;
+              </a>
+            </p>
+          </div>
+        `,
+      }),
+    }).catch(() => {});
 
     // Add user notification
     const newNotif: NotificationItem = {
@@ -399,6 +549,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
+    // Sync sold status to Supabase
+    supabase
+      .from('products')
+      .update({ status: 'sold', updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .then(({ error }) => {
+        if (error) console.warn('Supabase markAsSold error:', error.message);
+      });
+
     triggerConfetti();
 
     const newNotif: NotificationItem = {
@@ -420,6 +579,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setProducts((prev) =>
       prev.map((p) => (p.id === id ? { ...p, status: 'approved' } : p))
     );
+    supabase
+      .from('products')
+      .update({ status: 'approved', updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .then(({ error }) => {
+        if (error) console.warn('Supabase restoreToAvailable error:', error.message);
+      });
     pushToast('Listing restored to Available on marketplace!', 'success');
   };
 
@@ -431,7 +597,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((p) => (p.id === id ? { ...p, status: 'approved', rejectionReason: undefined } : p))
     );
 
-    // Notify seller
+    // Call Supabase RPC (updates DB, writes in-app notification, queues email in email_queue)
+    supabase
+      .rpc('admin_approve_product', { p_product_id: id })
+      .then(({ error }) => {
+        if (error) console.warn('admin_approve_product error:', error.message);
+      });
+
+    // Send email alert to student seller via /api/send-email
+    if (target.sellerId) {
+      const sellerStudent = students.find((s) => s.id === target.sellerId);
+      const recipient = sellerStudent?.email || (target as any).sellerEmail;
+      if (recipient) {
+        fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: recipient,
+            subject: `🎉 Listing Approved: ${target.title}`,
+            html: `
+              <div style="font-family:sans-serif;padding:24px;border:3px solid #1C1C1C;border-radius:12px;background:#FFFBEA;">
+                <h2 style="color:#1C1C1C;margin:0 0 12px 0;">Your listing is live!</h2>
+                <p>Great news! Your listing <strong>${target.title}</strong> has been approved by moderators and is now visible to all BMSIT students.</p>
+                <p style="margin-top:20px;">
+                  <a href="https://marketplace.bmsit.co.in" style="display:inline-block;padding:10px 18px;background:#F2A93B;color:#1C1C1C;font-weight:bold;text-decoration:none;border:2px solid #1C1C1C;border-radius:6px;">
+                    View on BMSIT Marketplace &rarr;
+                  </a>
+                </p>
+              </div>
+            `,
+          }),
+        }).catch(() => {});
+      }
+    }
+
+    // Notify seller locally
     const notif: NotificationItem = {
       id: 'notif-' + Date.now(),
       userId: target.sellerId,
@@ -463,25 +663,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const target = products.find((p) => p.id === id);
     if (!target) return;
 
+    const fullReason = adminNotes ? `${reason} (${adminNotes})` : reason;
+
     setProducts((prev) =>
       prev.map((p) =>
         p.id === id
           ? {
               ...p,
               status: 'rejected',
-              rejectionReason: reason,
+              rejectionReason: fullReason,
               adminNotes,
             }
           : p
       )
     );
 
+    // Call Supabase RPC (updates DB, writes in-app notification, queues email in email_queue)
+    supabase
+      .rpc('admin_reject_product', {
+        p_product_id: id,
+        p_reason: fullReason,
+      })
+      .then(({ error }) => {
+        if (error) console.warn('admin_reject_product error:', error.message);
+      });
+
+    // Send email alert to student seller
+    if (target.sellerId) {
+      const sellerStudent = students.find((s) => s.id === target.sellerId);
+      const recipient = sellerStudent?.email || (target as any).sellerEmail;
+      if (recipient) {
+        fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: recipient,
+            subject: `Listing Update Required: ${target.title}`,
+            html: `
+              <div style="font-family:sans-serif;padding:24px;border:3px solid #1C1C1C;border-radius:12px;background:#FFFBEA;">
+                <h2 style="color:#1C1C1C;margin:0 0 12px 0;">Listing Update Required</h2>
+                <p>Your listing <strong>${target.title}</strong> could not be approved at this time.</p>
+                <p><strong>Reason:</strong> ${fullReason}</p>
+                <p>You can review and update your listing to meet BMSIT community guidelines.</p>
+              </div>
+            `,
+          }),
+        }).catch(() => {});
+      }
+    }
+
     // Notify seller
     const notif: NotificationItem = {
       id: 'notif-' + Date.now(),
       userId: target.sellerId,
       title: 'Listing Rejected ⚠️',
-      message: `"${target.title}" was rejected: ${reason}`,
+      message: `"${target.title}" was rejected: ${fullReason}`,
       type: 'rejection',
       read: false,
       timestamp: 'Just now',
@@ -495,7 +731,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       adminName: currentUser.name,
       action: 'Rejected Listing',
       target: `${target.title} (${target.id})`,
-      details: `Reason: ${reason}`,
+      details: `Reason: ${fullReason}`,
       timestamp: new Date().toLocaleString(),
     };
     setAdminLogs((prev) => [log, ...prev]);
