@@ -771,12 +771,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return p;
       })
     );
+
+    // Sync updates to Supabase products table
+    if (isUUID(id)) {
+      const dbUpdates: any = {
+        updated_at: new Date().toISOString(),
+      };
+      if (updates.title !== undefined) dbUpdates.title = updates.title;
+      if (updates.price !== undefined) dbUpdates.price = updates.price;
+      if (updates.originalPrice !== undefined) dbUpdates.original_price = updates.originalPrice;
+      if (updates.description !== undefined) dbUpdates.description = updates.description;
+      if (updates.category !== undefined) dbUpdates.category = updates.category;
+      if (updates.condition !== undefined) dbUpdates.condition = updates.condition;
+      if (updates.handoverLocation !== undefined) dbUpdates.location = updates.handoverLocation;
+
+      supabase
+        .from('products')
+        .update(dbUpdates)
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) console.warn('Supabase updateProduct error:', error.message);
+        });
+    }
+
     pushToast('Listing updated successfully.', 'success');
   };
 
   const deleteProduct = (id: string) => {
     const target = products.find((p) => p.id === id);
     setProducts((prev) => prev.filter((p) => p.id !== id));
+
+    // Sync deletion to Supabase products table
+    if (isUUID(id)) {
+      supabase
+        .from('products')
+        .delete()
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) {
+            console.warn('Direct delete failed, falling back to soft remove:', error.message);
+            supabase.from('products').update({ status: 'removed' }).eq('id', id);
+          }
+        });
+    }
+
     pushToast(`"${target?.title || 'Listing'}" deleted.`, 'info');
   };
 
@@ -1675,6 +1713,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setStudents((prev) =>
       prev.map((s) => (s.id === currentUser.id ? { ...s, ...updates } : s))
     );
+
+    // Sync profile updates to Supabase profiles table
+    if (isUUID(currentUser.id)) {
+      const dbUpdates: any = { updated_at: new Date().toISOString() };
+      if (updates.name !== undefined) dbUpdates.full_name = updates.name;
+      if (updates.branch !== undefined) dbUpdates.branch = updates.branch;
+      if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
+      if (updates.avatar !== undefined) dbUpdates.avatar_url = updates.avatar;
+      if (updates.admissionYear !== undefined) dbUpdates.admission_year = updates.admissionYear;
+      if (updates.currentYear !== undefined) dbUpdates.current_year = updates.currentYear;
+
+      supabase
+        .from('profiles')
+        .update(dbUpdates)
+        .eq('id', currentUser.id)
+        .then(({ error }) => {
+          if (error) console.warn('Supabase updateProfile error:', error.message);
+        });
+    }
+
     pushToast('Profile updated successfully!', 'success');
   };
 
