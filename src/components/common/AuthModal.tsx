@@ -435,7 +435,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={signInEmail}
                     onChange={(e) => setSignInEmail(e.target.value)}
                     required
-                    placeholder="student.usn@bmsit.in"
                     className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                   />
                 </div>
@@ -461,7 +460,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={signInPassword}
                     onChange={(e) => setSignInPassword(e.target.value)}
                     required
-                    placeholder="••••••••"
                     className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                   />
                 </div>
@@ -499,7 +497,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="e.g. Varun Gowda"
                   className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                 />
               </div>
@@ -511,9 +508,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <label className="block text-xs font-bold text-[#1C1C1C]">
                   University Seat Number (USN) *
                 </label>
-                <span className="text-[10px] text-neutral-500 font-mono">
-                  Example: 1BY24AI049
-                </span>
               </div>
               <div className="relative">
                 <Hash className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
@@ -522,7 +516,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={usnInput}
                   onChange={(e) => handleUsnChange(e.target.value)}
-                  placeholder="1BY24AI049"
                   maxLength={10}
                   className="w-full pl-9 pr-3 py-2 text-xs font-mono uppercase tracking-wider rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                 />
@@ -598,7 +591,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name.usn@bmsit.in"
                   className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                 />
               </div>
@@ -614,7 +606,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
                   className="w-full px-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none"
                 />
               </div>
@@ -627,7 +618,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
                   className="w-full px-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none"
                 />
               </div>
@@ -680,7 +670,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 maxLength={6}
                 value={enteredOtp}
                 onChange={(e) => setEnteredOtp(e.target.value.replace(/\D/g, ''))}
-                placeholder="000000"
                 className="w-56 mx-auto text-center font-mono text-2xl font-black tracking-[0.3em] py-2.5 rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[3px_3px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
               />
             </div>
@@ -766,7 +755,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
-                  placeholder="student.usn@bmsit.in"
                   className="w-full px-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C]"
                 />
                 <div className="flex items-center justify-between pt-2">
