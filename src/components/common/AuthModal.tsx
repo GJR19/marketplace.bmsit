@@ -254,12 +254,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  // Handle Real 6-Digit OTP Verification
+  // Handle Real OTP Verification (Supports 6 to 8 digit codes)
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanOtp = enteredOtp.trim();
-    if (cleanOtp.length !== 6) {
-      pushToast('Please enter the full 6-digit verification code.', 'warning');
+    if (cleanOtp.length < 6 || cleanOtp.length > 8) {
+      pushToast('Please enter the confirmation code received in your email.', 'warning');
       return;
     }
 
@@ -768,7 +768,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 Verify Your BMSIT Email
               </h3>
               <p className="text-xs text-[#1C1C1C]/80 mt-1 max-w-sm mx-auto">
-                A 6-digit confirmation code was sent to{' '}
+                A confirmation code was sent to{' '}
                 <span className="font-mono font-bold text-[#1C1C1C]">
                   {pendingEmail}
                 </span>. Please check your college inbox or spam folder.
@@ -779,10 +779,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <input
                 type="text"
                 required
-                maxLength={6}
+                maxLength={8}
                 value={enteredOtp}
                 onChange={(e) => setEnteredOtp(e.target.value.replace(/\D/g, ''))}
-                className="w-56 mx-auto text-center font-mono text-2xl font-black tracking-[0.3em] py-2.5 rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[3px_3px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                className="w-72 max-w-full mx-auto text-center font-mono text-2xl font-black tracking-[0.2em] py-2.5 rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[3px_3px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
               />
             </div>
 
@@ -811,7 +811,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </button>
               <button
                 type="submit"
-                disabled={loading || enteredOtp.trim().length !== 6}
+                disabled={loading || (enteredOtp.trim().length !== 6 && enteredOtp.trim().length !== 8)}
                 className="w-1/2 py-2.5 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#e49b2f] transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 {loading ? (
