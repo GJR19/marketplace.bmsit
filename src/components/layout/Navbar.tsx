@@ -280,7 +280,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                     unreadNotifs.map((n) => (
                       <div
                         key={n.id}
-                        className="p-2.5 rounded-xl border border-[#1C1C1C]/25 bg-[#FFF9E6] text-xs transition hover:bg-[#FFF1D9] space-y-2 shadow-[1px_1px_0px_#1C1C1C]"
+                        onClick={() => {
+                          markNotificationAsRead(n.id);
+                          setNotifDropdownOpen(false);
+                          if (n.link) {
+                            if (n.link.includes('wanted')) navigateTo('wanted');
+                            else if (n.link.includes('marketplace')) navigateTo('marketplace');
+                            else navigateTo('dashboard');
+                          }
+                        }}
+                        className="p-2.5 rounded-xl border border-[#1C1C1C]/25 bg-[#FFF9E6] text-xs transition hover:bg-[#FFF1D9] space-y-2 shadow-[1px_1px_0px_#1C1C1C] cursor-pointer"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-bold text-[#1C1C1C] truncate">{n.title}</span>

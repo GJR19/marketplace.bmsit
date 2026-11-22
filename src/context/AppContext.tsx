@@ -447,29 +447,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loadLiveWantedRequests();
   }, []);
 
-  // Supabase User Notifications Hydration
+  // Supabase User Notifications Hydration & Realtime Channel
   useEffect(() => {
     if (!currentUser?.id) return;
-    supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', currentUser.id)
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (!error && data && data.length > 0) {
-          const dbNotifs: NotificationItem[] = data.map((n: any) => ({
-            id: n.id,
-            userId: n.user_id,
-            title: n.title,
-            message: n.message,
-            type: n.type || 'system',
-            read: Boolean(n.is_read),
-            timestamp: new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            link: n.link || '/dashboard',
-          }));
-          setNotifications(dbNotifs);
+
+    const fetchNotifications = () => {
+      supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('created_at', { ascending: false })
+        .then(({ data, error }) => {
+          if (!error && data && data.length > 0) {
+            const dbNotifs: NotificationItem[] = data.map((n: any) => ({
+              id: n.id,
+              userId: n.user_id,
+              title: n.title,
+              message: n.message,
+              type: n.type || 'system',
+              read: Boolean(n.is_read),
+              timestamp: new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              link: n.link || '/dashboard',
+            }));
+            setNotifications(dbNotifs);
+          }
+        });
+    };
+
+    fetchNotifications();
+
+    const channel = supabase
+      .channel(`public:notifications:${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${currentUser.id}`,
+        },
+        () => {
+          fetchNotifications();
         }
-      });
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [currentUser?.id]);
 
   // Products Handlers
@@ -1174,10 +1199,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
+    supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('id', id)
+      .then(({ error }) => {
+        if (error) console.warn('Supabase markNotificationAsRead error:', error.message);
+      });
   };
 
   const markAllNotificationsAsRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    if (currentUser?.id) {
+      supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', currentUser.id)
+        .then(({ error }) => {
+          if (error) console.warn('Supabase markAllNotificationsAsRead error:', error.message);
+        });
+    }
     pushToast('All notifications marked as read.', 'info');
   };
 
