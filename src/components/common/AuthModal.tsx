@@ -30,7 +30,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   initialMode = 'signin',
 }) => {
-  const { currentUser, setCurrentUser, registerUser, pushToast, triggerConfetti } = useApp();
+  const { currentUser, setCurrentUser, registerUser, pushToast, triggerConfetti, students } = useApp();
 
   const [mode, setMode] = useState<'signin' | 'register' | 'verify' | 'forgot'>(initialMode);
   const [loading, setLoading] = useState(false);
@@ -41,6 +41,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [signInError, setSignInError] = useState<string | null>(null);
 
   // Register form state
+  const [registerError, setRegisterError] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [usnInput, setUsnInput] = useState('');
@@ -70,6 +71,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   // Clear Register fields
   const resetRegisterForm = () => {
+    setRegisterError(null);
     setFullName('');
     setEmail('');
     setUsnInput('');
@@ -120,6 +122,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleUsnChange = (val: string) => {
     const clean = val.toUpperCase();
     setUsnInput(clean);
+    if (registerError) setRegisterError(null);
     if (clean.length >= 7) {
       const parsed = parseUSN(clean);
       setUsnResult(parsed);
@@ -171,18 +174,77 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
+    const cleanUsn = usnInput.trim().toUpperCase();
+    const cleanEmail = trimmedEmail;
+
+    // A. Check against locally loaded students list
+    const existingByUsn = students.find(
+      (s) => s.usn && s.usn.trim().toUpperCase() === cleanUsn
+    );
+    if (existingByUsn) {
+      setRegisterError(`An account with USN ${cleanUsn} already exists.`);
+      pushToast(`An account with USN ${cleanUsn} already exists. Please sign in instead.`, 'error');
+      return;
+    }
+
+    const existingByEmail = students.find(
+      (s) => s.email && s.email.trim().toLowerCase() === cleanEmail
+    );
+    if (existingByEmail) {
+      setRegisterError(`An account with email ${cleanEmail} already exists.`);
+      pushToast('An account with this email already exists. Please sign in instead.', 'info');
+      setSignInEmail(cleanEmail);
+      return;
+    }
+
+    setLoading(true);
+    setRegisterError(null);
+
+    // B. Check Supabase profiles table directly in case registered from another browser
+    try {
+      const { data: existingProfiles } = await supabase
+        .from('profiles')
+        .select('id, college_email, usn')
+        .or(`college_email.ilike.${cleanEmail},usn.ilike.${cleanUsn}`);
+
+      if (existingProfiles && existingProfiles.length > 0) {
+        const usnMatch = existingProfiles.find(
+          (p) => p.usn?.trim().toUpperCase() === cleanUsn
+        );
+        if (usnMatch) {
+          setRegisterError(`An account with USN ${cleanUsn} already exists.`);
+          pushToast(`An account with USN ${cleanUsn} already exists. Please sign in instead.`, 'error');
+          setLoading(false);
+          return;
+        }
+
+        const emailMatch = existingProfiles.find(
+          (p) => p.college_email?.trim().toLowerCase() === cleanEmail
+        );
+        if (emailMatch) {
+          setRegisterError(`An account with email ${cleanEmail} already exists.`);
+          pushToast('An account with this email already exists. Please sign in instead.', 'info');
+          setSignInEmail(cleanEmail);
+          switchToSignIn();
+          setLoading(false);
+          return;
+        }
+      }
+    } catch (checkErr) {
+      console.warn('Profile uniqueness pre-check note:', checkErr);
+    }
+
     const userData = {
       full_name: fullName.trim(),
-      usn: usnInput.trim().toUpperCase(),
+      usn: cleanUsn,
       branch: finalBranch,
       admission_year: usnResult.admissionYearFull || 2024,
       current_year: usnResult.currentYear || '1st Year (Fresher)',
     };
 
-    setLoading(true);
     try {
       const { data, error } = await supabase.auth.signUp({
-        email: trimmedEmail,
+        email: cleanEmail,
         password,
         options: {
           data: userData,
@@ -190,18 +252,38 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       });
 
       if (error) {
-        if (error.message.includes('suspended')) {
+        const msg = error.message.toLowerCase();
+        if (msg.includes('suspended')) {
+          setRegisterError('Your account has been suspended. Please contact gjr19atwork@gmail.com');
           pushToast(
             'An account associated with this email has been suspended. Please contact the administrator at gjr19atwork@gmail.com',
             'error'
           );
-        } else if (error.message.includes('already registered')) {
-          pushToast('This email is already registered. Please sign in instead.', 'info');
-          setSignInEmail(trimmedEmail);
-          setMode('signin');
+        } else if (
+          msg.includes('already registered') ||
+          msg.includes('already exists') ||
+          msg.includes('user already registered') ||
+          msg.includes('duplicate')
+        ) {
+          setRegisterError(`An account with email ${cleanEmail} already exists.`);
+          pushToast('An account with this email already exists. Please sign in instead.', 'info');
+          setSignInEmail(cleanEmail);
+          switchToSignIn();
         } else {
+          setRegisterError(error.message);
           pushToast(error.message, 'error');
         }
+        setLoading(false);
+        return;
+      }
+
+      // Supabase user enumeration prevention:
+      // If user already exists and email confirmations are enabled, Supabase returns data.user with empty identities: []
+      if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        setRegisterError(`An account with email ${cleanEmail} already exists.`);
+        pushToast('An account with this email already exists. Please sign in instead.', 'info');
+        setSignInEmail(cleanEmail);
+        switchToSignIn();
         setLoading(false);
         return;
       }
@@ -217,11 +299,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         if (profile) {
           setCurrentUser(profileToStudent(profile));
         } else {
+          try {
+            await supabase.from('profiles').upsert({
+              id: data.user.id,
+              full_name: fullName.trim(),
+              college_email: cleanEmail,
+              usn: cleanUsn,
+              branch: finalBranch,
+              admission_year: usnResult.admissionYearFull || 2024,
+              current_year: usnResult.currentYear || '1st Year (Fresher)',
+              is_verified: true,
+              role: 'student',
+              status: 'active',
+            });
+          } catch (e) {
+            console.warn('Profile sync note:', e);
+          }
+
           registerUser({
             id: data.user.id,
             name: fullName.trim(),
-            email: trimmedEmail,
-            usn: usnInput.trim().toUpperCase(),
+            email: cleanEmail,
+            usn: cleanUsn,
             branch: finalBranch,
             admissionYear: usnResult.admissionYearFull || 2024,
             currentYear: usnResult.currentYear || '1st Year (Fresher)',
@@ -235,19 +334,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         return;
       }
 
-      setPendingEmail(trimmedEmail);
+      setPendingEmail(cleanEmail);
       setPendingData({
         name: fullName.trim(),
-        email: trimmedEmail,
-        usn: usnInput.trim().toUpperCase(),
+        email: cleanEmail,
+        usn: cleanUsn,
         branch: finalBranch,
         admissionYear: usnResult.admissionYearFull || 2024,
         currentYear: usnResult.currentYear || '1st Year (Fresher)',
       });
       setResendCooldown(60);
       setMode('verify');
-      pushToast(`Verification code sent to ${trimmedEmail}!`, 'success');
+      pushToast(`Verification code sent to ${cleanEmail}!`, 'success');
     } catch (err: any) {
+      setRegisterError(err.message || 'Registration failed. Please try again.');
       pushToast(err.message || 'Registration failed. Please try again.', 'error');
     } finally {
       setLoading(false);
@@ -299,6 +399,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         if (profile) {
           setCurrentUser(profileToStudent(profile));
         } else if (pendingData) {
+          try {
+            await supabase.from('profiles').upsert({
+              id: sessionUser.id,
+              full_name: pendingData.name,
+              college_email: pendingData.email,
+              usn: pendingData.usn,
+              branch: pendingData.branch,
+              admission_year: pendingData.admissionYear,
+              current_year: pendingData.currentYear,
+              is_verified: true,
+              role: 'student',
+              status: 'active',
+            });
+          } catch (e) {
+            console.warn('Profile sync note:', e);
+          }
+
           registerUser({
             ...pendingData,
             id: sessionUser.id,
@@ -702,7 +819,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   type="email"
                   required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => { setEmail(e.target.value); if (registerError) setRegisterError(null); }}
                   className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                 />
               </div>
@@ -734,6 +851,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 />
               </div>
             </div>
+
+            {registerError && (
+              <div className="p-3 rounded-xl border-2 border-rose-600 bg-rose-50 text-rose-900 text-xs font-bold flex items-center justify-between gap-2 shadow-[2px_2px_0px_#1C1C1C]">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{registerError}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={switchToSignIn}
+                  className="text-[11px] underline font-extrabold text-rose-700 hover:text-rose-900 shrink-0 cursor-pointer"
+                >
+                  Sign In →
+                </button>
+              </div>
+            )}
 
             <p className="text-[11px] text-neutral-500 leading-tight">
               By registering, you agree to BMSIT Campus Peer-to-Peer guidelines. Only current students with verified @bmsit.in emails may list items.
