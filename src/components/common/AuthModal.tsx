@@ -64,6 +64,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [recoveryOtp, setRecoveryOtp] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
   const [showOtpRecovery, setShowOtpRecovery] = useState(false);
 
   // Clear Sign-In fields
@@ -92,6 +93,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setNewPassword('');
     setConfirmNewPassword('');
     setRecoveryOtp('');
+      setResetEmail('');
     setShowOtpRecovery(false);
     setMode('signin');
   };
@@ -562,7 +564,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
-        redirectTo: `${window.location.origin}/#type=recovery`,
+        redirectTo: `${window.location.origin}/`,
       });
 
       if (error) {
@@ -592,6 +594,56 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     setLoading(true);
     try {
+      // 1. Ensure we have an active session
+      let { data: { session } } = await supabase.auth.getSession();
+
+      // If missing from memory, attempt immediate recovery from current URL
+      if (!session) {
+        const href = window.location.href;
+        const accessTokenMatch = href.match(/access_token=([^&]+)/);
+        const refreshTokenMatch = href.match(/refresh_token=([^&]+)/);
+        if (accessTokenMatch) {
+          const access_token = decodeURIComponent(accessTokenMatch[1]);
+          const refresh_token = refreshTokenMatch ? decodeURIComponent(refreshTokenMatch[1]) : '';
+          const { data: setRes } = await supabase.auth.setSession({ access_token, refresh_token });
+          session = setRes?.session;
+        } else {
+          const codeMatch = href.match(/[?&]code=([^&]+)/);
+          if (codeMatch) {
+            const code = decodeURIComponent(codeMatch[1]);
+            const { data: exRes } = await supabase.auth.exchangeCodeForSession(code);
+            session = exRes?.session;
+          }
+        }
+      }
+
+      // If still missing and user provided email + OTP code, verify OTP directly
+      const targetEmail = (resetEmail || forgotEmail).trim().toLowerCase();
+      if (!session && targetEmail && recoveryOtp.trim()) {
+        const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
+          email: targetEmail,
+          token: recoveryOtp.trim(),
+          type: 'recovery',
+        });
+        if (otpError) {
+          pushToast(otpError.message, 'error');
+          setLoading(false);
+          return;
+        }
+        if (otpData?.session) {
+          await supabase.auth.setSession(otpData.session);
+          session = otpData.session;
+        }
+      }
+
+      if (!session) {
+        setShowOtpRecovery(true);
+        pushToast('Recovery session missing or expired. Please enter your email and OTP code below.', 'warning');
+        setLoading(false);
+        return;
+      }
+
+      // 2. Update password for authenticated user
       const { error } = await supabase.auth.updateUser({
         password: newPassword,
       });
@@ -602,12 +654,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         return;
       }
 
-      // Clear recovery tokens from address bar
+      // 3. Clear recovery tokens from address bar
       if (window.history && window.history.replaceState) {
         window.history.replaceState(null, '', window.location.pathname);
       }
 
-      // Hydrate student profile
+      // 4. Hydrate student profile
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data: profile } = await supabase
@@ -634,7 +686,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Handle Verify Recovery OTP Code
   const handleVerifyRecoveryOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanEmail = forgotEmail.trim().toLowerCase();
+    const cleanEmail = (resetEmail || forgotEmail).trim().toLowerCase();
     const cleanToken = recoveryOtp.trim();
 
     if (!cleanEmail.endsWith('@bmsit.in')) {
@@ -642,7 +694,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
     if (cleanToken.length < 6 || cleanToken.length > 8) {
-      pushToast('Please enter a valid recovery code received in email.', 'warning');
+      pushToast('Please enter a valid 6 or 8-digit recovery code received in email.', 'warning');
       return;
     }
     if (newPassword.length < 6) {
@@ -667,6 +719,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         pushToast(error.message || 'Invalid or expired recovery code.', 'error');
         setLoading(false);
         return;
+      }
+
+      // Explicitly set session
+      if (data?.session) {
+        await supabase.auth.setSession(data.session);
       }
 
       // 2. Set new password
@@ -1256,6 +1313,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
 
             <div className="space-y-3">
+              {showOtpRecovery && (
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-[#1C1C1C] mb-1">
+                      College Email *
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
+                      <input
+                        type="email"
+                        required
+                        value={resetEmail || forgotEmail}
+                        onChange={(e) => setResetEmail(e.target.value)}
+                        placeholder="your.usn@bmsit.in"
+                        className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#1C1C1C] mb-1">
+                      Recovery OTP Code from Email *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={8}
+                      value={recoveryOtp}
+                      onChange={(e) => setRecoveryOtp(e.target.value.replace(/\D/g, ''))}
+                      className="w-full px-3 py-2 text-xs font-mono font-bold tracking-widest rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                    />
+                  </div>
+                </>
+              )}
+
               <div>
                 <label className="block text-xs font-bold text-[#1C1C1C] mb-1">
                   New Password *

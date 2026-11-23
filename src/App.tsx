@@ -74,12 +74,43 @@ const MainApp: React.FC = () => {
     setAuthModalOpen(true);
   };
 
-  // Detect Supabase Password Recovery from URL or Auth State
+  // Detect Supabase Password Recovery from URL or Auth State with explicit session recovery
   useEffect(() => {
-    const checkRecovery = () => {
+    const checkRecovery = async () => {
+      const href = window.location.href;
       const hash = window.location.hash || '';
       const search = window.location.search || '';
-      if (hash.includes('type=recovery') || search.includes('type=recovery')) {
+
+      const isRecovery =
+        hash.includes('type=recovery') ||
+        search.includes('type=recovery') ||
+        href.includes('type=recovery');
+
+      // 1. If access_token exists anywhere in URL/hash, explicitly set session
+      const accessTokenMatch = href.match(/access_token=([^&]+)/);
+      const refreshTokenMatch = href.match(/refresh_token=([^&]+)/);
+      if (accessTokenMatch) {
+        const access_token = decodeURIComponent(accessTokenMatch[1]);
+        const refresh_token = refreshTokenMatch ? decodeURIComponent(refreshTokenMatch[1]) : '';
+        try {
+          await supabase.auth.setSession({ access_token, refresh_token });
+        } catch (e) {
+          console.warn('setSession from URL token error:', e);
+        }
+      }
+
+      // 2. If code exists in URL (PKCE flow), exchange for session
+      const codeMatch = href.match(/[?&]code=([^&]+)/);
+      if (codeMatch) {
+        const code = decodeURIComponent(codeMatch[1]);
+        try {
+          await supabase.auth.exchangeCodeForSession(code);
+        } catch (e) {
+          console.warn('exchangeCodeForSession error:', e);
+        }
+      }
+
+      if (isRecovery || accessTokenMatch) {
         setAuthModalMode('resetPassword');
         setAuthModalOpen(true);
       }
@@ -89,8 +120,13 @@ const MainApp: React.FC = () => {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
+        if (session) {
+          try {
+            await supabase.auth.setSession(session);
+          } catch (e) {}
+        }
         setAuthModalMode('resetPassword');
         setAuthModalOpen(true);
       }
