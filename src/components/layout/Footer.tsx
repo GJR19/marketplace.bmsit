@@ -145,8 +145,8 @@ export const Footer: React.FC<FooterProps> = ({ setActiveTab, onOpenAuth }) => {
         </div>
 
         {/* Bottom Bar with dashed line */}
-        <div className="mt-12 pt-6 border-t-2 border-dashed border-[#1C1C1C]/25 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-neutral-600">
-          <p className="flex items-center gap-1.5 flex-wrap">
+        <div className="mt-12 pt-6 border-t-2 border-dashed border-[#1C1C1C]/25 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-neutral-600 text-center sm:text-left">
+          <p className="flex items-center justify-center sm:justify-start gap-1.5 flex-wrap">
             <span>© 2026 marketplace.bmsit — built with ❤️ by</span>
             <a
               href="https://github.com/GJR19"
@@ -157,7 +157,7 @@ export const Footer: React.FC<FooterProps> = ({ setActiveTab, onOpenAuth }) => {
               GURURAJ REDDY
             </a>
           </p>
-          <div className="flex items-center gap-3 text-[11px]">
+          <div className="hidden sm:flex items-center gap-3 text-[11px]">
             <button
               onClick={() => setActiveTab('terms')}
               className="hover:underline hover:text-[#1C1C1C] cursor-pointer"
