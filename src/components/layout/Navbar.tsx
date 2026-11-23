@@ -208,7 +208,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {/* 1. SEPARATE CHAT BUTTON (Directly opens all chats) */}
               <button
                 onClick={() => navigateTo('chats')}
-                className={`hidden md:flex relative p-2.5 rounded-xl border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] transition items-center justify-center cursor-pointer ${
+                className={`flex relative p-2 sm:p-2.5 rounded-xl border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] transition items-center justify-center cursor-pointer shrink-0 ${
                   activeTab === 'chats'
                     ? 'bg-[#F2A93B] text-[#1C1C1C]'
                     : 'bg-white text-[#1C1C1C] hover:bg-[#FFE082]'
