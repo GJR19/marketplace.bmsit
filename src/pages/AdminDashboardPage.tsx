@@ -398,7 +398,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
             BMSIT Moderator Admin Dashboard
           </h1>
           <p className="text-xs sm:text-sm text-neutral-700 mt-1 max-w-xl">
-            Simulated campus administrator view. Approve student postings, enforce verified USN authenticity, manage reports, and review moderation logs.
+            Campus administrator moderation console. Approve student postings, enforce verified USN authenticity, manage reports, and review moderation logs.
           </p>
         </div>
 
@@ -1034,7 +1034,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       <ConfirmModal
         isOpen={suspendModalOpen}
         title="Suspend Student Account?"
-        message={`Are you sure you want to suspend ${userToSuspend?.name} (${userToSuspend?.usn})? Suspended accounts cannot post listings or send messages in the demo.`}
+        message={`Are you sure you want to suspend ${userToSuspend?.name} (${userToSuspend?.usn})? Suspended accounts cannot post listings or send messages on the marketplace.`}
         confirmLabel="Suspend Account"
         variant="danger"
         onConfirm={() => {

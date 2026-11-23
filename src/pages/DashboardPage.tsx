@@ -23,6 +23,7 @@ import {
   X,
   Camera,
   Upload,
+  LogOut,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Product, ProductCategory, WantedRequest } from '../types';
@@ -30,16 +31,7 @@ import { ConfirmModal } from '../components/common/ConfirmModal';
 import { ProductCard } from '../components/product/ProductCard';
 import { formatPriceINR } from '../utils/usnParser';
 import { normalizeCampusLocation } from '../data/mockData';
-
-const PRESET_AVATARS = [
-  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80',
-  'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=200&q=80',
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
-  'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=200&q=80',
-  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80',
-  'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
-];
+import { supabase } from '../lib/supabase';
 
 interface DashboardPageProps {
   initialTab?: 'postings' | 'wanted' | 'settings';
@@ -69,11 +61,49 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     deleteWantedRequest,
     updateProfile,
     pushToast,
+    logoutUser,
   } = useApp();
 
   const [activeTab, setActiveTabState] = useState<'postings' | 'wanted' | 'settings'>(
     initialTab || 'postings'
   );
+
+  // Password Reset state in Settings
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword) {
+      pushToast('Please enter a new password.', 'warning');
+      return;
+    }
+    if (newPassword.length < 6) {
+      pushToast('Password must be at least 6 characters.', 'warning');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      pushToast('Passwords do not match.', 'error');
+      return;
+    }
+
+    setUpdatingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+      if (error) throw error;
+
+      pushToast('Password updated successfully!', 'success');
+      setNewPassword('');
+      setConfirmNewPassword('');
+    } catch (err: any) {
+      pushToast(err.message || 'Failed to update password.', 'error');
+    } finally {
+      setUpdatingPassword(false);
+    }
+  };
 
   const setActiveTab = (tab: 'postings' | 'wanted' | 'settings') => {
     setActiveTabState(tab);
@@ -591,7 +621,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                     Profile Photo
                   </h4>
                   <p className="text-xs text-neutral-500">
-                    Upload your own photo or choose from one of the campus avatars.
+                    Upload your profile picture (JPEG, PNG or WebP under 4MB).
                   </p>
                 </div>
 
@@ -604,7 +634,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                     />
                   </div>
 
-                  <div className="space-y-3">
+                  <div>
                     <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] text-xs font-bold text-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] cursor-pointer hover:bg-[#e49b2f] transition">
                       <Upload className="w-4 h-4" />
                       <span>Upload New Photo</span>
@@ -615,75 +645,70 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                         onChange={handleAvatarUpload}
                       />
                     </label>
-
-                    <div>
-                      <p className="text-[11px] font-bold text-neutral-600 mb-1.5">
-                        Or pick a preset avatar:
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {PRESET_AVATARS.map((url, idx) => {
-                          const isSelected = currentUser.avatar === url;
-                          return (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => {
-                                updateProfile({ avatar: url });
-                                pushToast('Profile avatar updated!', 'success');
-                              }}
-                              className={`w-9 h-9 rounded-xl border-2 overflow-hidden transition ${
-                                isSelected
-                                  ? 'border-[#1C1C1C] ring-2 ring-[#2563EB] scale-105 shadow-[2px_2px_0px_#1C1C1C]'
-                                  : 'border-[#1C1C1C]/40 opacity-70 hover:opacity-100'
-                              }`}
-                            >
-                              <img
-                                src={url}
-                                alt={`Preset ${idx + 1}`}
-                                className="w-full h-full object-cover"
-                              />
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Simulated Change Password */}
+              {/* Password Reset */}
               <div className="pt-4 border-t border-[#1C1C1C]/15 space-y-3">
-                <h4 className="font-head font-bold text-base text-[#1C1C1C]">
-                  Security (Demo Password Reset)
-                </h4>
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <input
-                    type="password"
-                    placeholder="New password"
-                    className="p-2.5 rounded-xl border-2 border-[#1C1C1C] bg-[#FFFBF5]"
-                  />
-                  <input
-                    type="password"
-                    placeholder="Confirm new password"
-                    className="p-2.5 rounded-xl border-2 border-[#1C1C1C] bg-[#FFFBF5]"
-                  />
+                <div>
+                  <h4 className="font-head font-bold text-base text-[#1C1C1C]">
+                    Password Reset
+                  </h4>
+                  <p className="text-xs text-neutral-500">
+                    Update your account password securely.
+                  </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => pushToast('Password updated in demo session memory.', 'success')}
-                  className="px-4 py-2 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B]"
-                >
-                  Update Password
-                </button>
+                <form onSubmit={handlePasswordUpdate} className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="block text-xs font-bold text-[#1C1C1C] mb-1">
+                        New Password
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        minLength={6}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="At least 6 characters"
+                        className="w-full p-2.5 rounded-xl border-2 border-[#1C1C1C] bg-[#FFFBF5] shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[#1C1C1C] mb-1">
+                        Confirm New Password
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        minLength={6}
+                        value={confirmNewPassword}
+                        onChange={(e) => setConfirmNewPassword(e.target.value)}
+                        placeholder="Re-enter new password"
+                        className="w-full p-2.5 rounded-xl border-2 border-[#1C1C1C] bg-[#FFFBF5] shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={updatingPassword}
+                    className="px-5 py-2.5 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#e49b2f] transition cursor-pointer disabled:opacity-50"
+                  >
+                    {updatingPassword ? 'Updating Password...' : 'Update Password'}
+                  </button>
+                </form>
               </div>
 
-              {/* Sign Out / Switch User */}
+              {/* Sign Out */}
               <div className="pt-4 border-t border-[#1C1C1C]/15 flex items-center justify-between">
                 <button
-                  onClick={onOpenAuth}
-                  className="px-4 py-2 text-xs font-bold rounded-xl border border-[#1C1C1C] bg-[#FFF9E6]"
+                  type="button"
+                  onClick={logoutUser}
+                  className="px-4 py-2 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-white text-[#E1467A] shadow-[2px_2px_0px_#1C1C1C] hover:bg-rose-50 transition cursor-pointer flex items-center gap-2"
                 >
-                  Switch Demo Student
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out of Account</span>
                 </button>
               </div>
             </div>
