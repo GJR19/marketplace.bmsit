@@ -356,7 +356,7 @@ export const SellItemPage: React.FC<SellItemPageProps> = ({
           <div className="p-3.5 bg-[#FFF1D9] rounded-xl border border-[#1C1C1C]/30 text-xs text-neutral-700 leading-relaxed flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-[#F2A93B] shrink-0" />
             <span>
-              Your listing will be submitted to the student moderator approval queue. You can inspect and approve it instantly in Demo Admin Mode!
+              Your listing will be submitted to the student moderator approval queue. Once verified by campus moderators, it goes live on the marketplace.
             </span>
           </div>
 
@@ -396,12 +396,12 @@ export const SellItemPage: React.FC<SellItemPageProps> = ({
             <div className="p-4 bg-[#FFF9E6] rounded-2xl border-2 border-[#1C1C1C] text-left text-xs space-y-2 shadow-[2px_2px_0px_#1C1C1C]">
               <div className="flex items-center gap-2 font-bold text-[#1C1C1C]">
                 <Clock className="w-4 h-4 text-[#F2A93B]" />
-                <span>What happens next in this demo?</span>
+                <span>What happens next?</span>
               </div>
               <p className="text-neutral-700">
-                1. Your listing is currently hidden from the public approved catalogue.<br />
-                2. You can view its pending status under <strong>My Postings</strong> in your Student Dashboard.<br />
-                3. You can toggle into <strong>Demo Admin Mode</strong> (in the navbar) to simulate approving or rejecting this listing!
+                1. Your listing is submitted for safety verification by campus moderators.<br />
+                2. You can track its approval status under <strong>My Postings</strong> in your Student Dashboard.<br />
+                3. Once approved, BMSIT students can contact you directly through the built-in campus chat.
               </p>
             </div>
 

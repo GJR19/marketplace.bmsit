@@ -86,7 +86,7 @@ export function parseUSN(usnInput: string): USNParseResult {
     isKnownBranch: Boolean(branchName),
     errorMessage: isBMSIT
       ? undefined
-      : 'Institution code is not 1BY (BMSIT). Demonstration permits BMSIT students.',
+      : 'Institution code is not 1BY (BMSIT). Marketplace is exclusively for BMSIT students.',
   };
 }
 

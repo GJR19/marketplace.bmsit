@@ -113,14 +113,14 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header className="sticky top-3 sm:top-4 z-40 px-3 sm:px-6 w-full max-w-[1400px] mx-auto">
-      <div className="bg-[#FFFBEA] rounded-2xl sm:rounded-3xl border-2.5 sm:border-3 border-[#1C1C1C] shadow-[4px_4px_0px_#1C1C1C] px-3.5 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between gap-3 sm:gap-4 w-full">
+      <div className="bg-[#FFFBEA] rounded-2xl sm:rounded-3xl border-2.5 sm:border-3 border-[#1C1C1C] shadow-[4px_4px_0px_#1C1C1C] px-3 sm:px-5 py-2 sm:py-3 flex items-center justify-between gap-2 sm:gap-4 w-full">
         {/* Brand Logo & Wordmark */}
         <button
           onClick={() => navigateTo('home')}
-          className="flex items-center gap-2.5 sm:gap-3 text-left group focus:outline-none shrink-0 cursor-pointer"
+          className="flex items-center gap-2 sm:gap-3 text-left group focus:outline-none shrink-0 cursor-pointer"
         >
           {/* Custom Marketplace + Campus Building Doodle Icon */}
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-[#F2A93B] border-2 border-[#1C1C1C] flex items-center justify-center shadow-[2px_2px_0px_#1C1C1C] group-hover:rotate-[-4deg] transition-transform">
+          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-[#F2A93B] border-2 border-[#1C1C1C] flex items-center justify-center shadow-[2px_2px_0px_#1C1C1C] group-hover:rotate-[-4deg] transition-transform">
             <svg
               className="w-5 h-5 sm:w-6 sm:h-6 text-[#1C1C1C]"
               viewBox="0 0 24 24"
@@ -342,10 +342,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             {!isLoggedIn ? (
               <button
                 onClick={onOpenAuth}
-                className="flex items-center gap-2 px-3.5 py-2 rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] text-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#e49b2f] transition font-bold text-xs sm:text-sm cursor-pointer"
+                className="flex items-center justify-center gap-1.5 p-2 sm:px-3.5 sm:py-2 rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] text-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#e49b2f] transition font-bold text-xs sm:text-sm cursor-pointer shrink-0"
+                title="Sign In / Register"
+                aria-label="Sign In or Register"
               >
-                <User className="w-4 h-4" />
-                <span>Sign In / Register</span>
+                <User className="w-5 h-5 sm:w-4 sm:h-4 text-[#1C1C1C]" />
+                <span className="hidden sm:inline">Sign In / Register</span>
               </button>
             ) : (
               <button
@@ -353,24 +355,26 @@ export const Navbar: React.FC<NavbarProps> = ({
                   setUserMenuOpen(!userMenuOpen);
                   setNotifDropdownOpen(false);
                 }}
-                className={`flex items-center gap-2 pl-2 pr-3 py-2 rounded-xl border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] transition cursor-pointer ${
+                className={`flex items-center gap-1.5 sm:gap-2 p-1.5 sm:pl-2 sm:pr-3 sm:py-2 rounded-xl border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] transition cursor-pointer shrink-0 ${
                   activeTab === 'dashboard'
                     ? 'bg-[#F2A93B] text-[#1C1C1C]'
                     : 'bg-white text-[#1C1C1C] hover:bg-[#FFE082]'
                 }`}
+                title="My Account"
+                aria-label="My Account"
               >
                 <img
                   src={currentUser.avatar}
                   alt={currentUser.name}
-                  className="w-6 h-6 rounded-lg border border-[#1C1C1C] object-cover"
+                  className="w-6 h-6 rounded-lg border border-[#1C1C1C] object-cover shrink-0"
                 />
-                <span className="text-xs sm:text-sm font-extrabold text-[#1C1C1C]">
+                <span className="text-xs sm:text-sm font-extrabold text-[#1C1C1C] hidden sm:inline">
                   My Account
                 </span>
-                <span className="text-xs font-semibold text-neutral-600 hidden sm:inline">
+                <span className="text-xs font-semibold text-neutral-600 hidden md:inline">
                   ({currentUser.name.split(' ')[0]})
                 </span>
-                <ChevronDown className="w-3.5 h-3.5 text-[#1C1C1C]/70" />
+                <ChevronDown className="w-3.5 h-3.5 text-[#1C1C1C]/70 hidden sm:inline" />
               </button>
             )}
 
