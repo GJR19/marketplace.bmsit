@@ -833,7 +833,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       if (signInError) setSignInError(null);
                     }}
                     required
-                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                    className="w-full pl-9 pr-3 py-2 text-base sm:text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                   />
                 </div>
               </div>
@@ -864,7 +864,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       if (signInError) setSignInError(null);
                     }}
                     required
-                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                    className="w-full pl-9 pr-3 py-2 text-base sm:text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                   />
                 </div>
               </div>
@@ -917,7 +917,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                  className="w-full pl-9 pr-3 py-2 text-base sm:text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                 />
               </div>
             </div>
@@ -937,7 +937,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   value={usnInput}
                   onChange={(e) => handleUsnChange(e.target.value)}
                   maxLength={10}
-                  className="w-full pl-9 pr-3 py-2 text-xs font-mono uppercase tracking-wider rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                  className="w-full pl-9 pr-3 py-2 text-base sm:text-xs font-mono uppercase tracking-wider rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                 />
               </div>
 
@@ -1011,7 +1011,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={email}
                   onChange={(e) => { setEmail(e.target.value); if (registerError) setRegisterError(null); }}
-                  className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                  className="w-full pl-9 pr-3 py-2 text-base sm:text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                 />
               </div>
             </div>
@@ -1026,7 +1026,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none"
+                  className="w-full px-3 py-2 text-base sm:text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none"
                 />
               </div>
               <div>
@@ -1038,7 +1038,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none"
+                  className="w-full px-3 py-2 text-base sm:text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none"
                 />
               </div>
             </div>
@@ -1200,7 +1200,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     required
                     value={forgotEmail}
                     onChange={(e) => setForgotEmail(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                    className="w-full pl-9 pr-3 py-2 text-base sm:text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                   />
                 </div>
                 <div className="flex items-center justify-between pt-2">
@@ -1254,7 +1254,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     minLength={6}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                    className="w-full pl-9 pr-3 py-2 text-base sm:text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                   />
                 </div>
               </div>
@@ -1271,7 +1271,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     minLength={6}
                     value={confirmNewPassword}
                     onChange={(e) => setConfirmNewPassword(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                    className="w-full pl-9 pr-3 py-2 text-base sm:text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                   />
                 </div>
               </div>

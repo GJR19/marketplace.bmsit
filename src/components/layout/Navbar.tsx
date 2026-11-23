@@ -201,14 +201,14 @@ export const Navbar: React.FC<NavbarProps> = ({
         </nav>
 
         {/* ─── ACTIONS & PROFILE (INSIDE FULL BOX) ─── */}
-        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-          {/* ONLY DISPLAY CHATS, WISHLIST & NOTIFICATIONS WHEN LOGGED IN */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          {/* ONLY DISPLAY CHATS, WISHLIST & NOTIFICATIONS ON TABLET/DESKTOP WHEN LOGGED IN */}
           {isLoggedIn && (
             <>
               {/* 1. SEPARATE CHAT BUTTON (Directly opens all chats) */}
               <button
                 onClick={() => navigateTo('chats')}
-                className={`relative p-2.5 rounded-xl border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] transition flex items-center justify-center cursor-pointer ${
+                className={`hidden md:flex relative p-2.5 rounded-xl border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] transition items-center justify-center cursor-pointer ${
                   activeTab === 'chats'
                     ? 'bg-[#F2A93B] text-[#1C1C1C]'
                     : 'bg-white text-[#1C1C1C] hover:bg-[#FFE082]'
@@ -227,7 +227,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {/* 2. SEPARATE WISHLIST BUTTON (Right next to Chat) */}
               <button
                 onClick={() => navigateTo('wishlist')}
-                className={`relative p-2.5 rounded-xl border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] transition flex items-center justify-center cursor-pointer ${
+                className={`hidden md:flex relative p-2.5 rounded-xl border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] transition items-center justify-center cursor-pointer ${
                   activeTab === 'wishlist'
                     ? 'bg-[#F2A93B] text-[#1C1C1C]'
                     : 'bg-white text-[#1C1C1C] hover:bg-[#FFE082]'
@@ -244,7 +244,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
 
               {/* 3. SEPARATE NOTIFICATIONS BUTTON & DROPDOWN */}
-              <div className="relative">
+              <div className="hidden md:block relative">
                 <button
                   onClick={() => {
                     setNotifDropdownOpen(!notifDropdownOpen);
@@ -459,12 +459,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
 
-          {/* Mobile Hamburger Toggle */}
+          {/* Mobile Hamburger Toggle with unread indicator badge */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden p-2.5 rounded-xl bg-white border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#FFE082] transition"
+            className="relative lg:hidden p-2 sm:p-2.5 rounded-xl bg-white border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#FFE082] transition cursor-pointer shrink-0"
             aria-label="Toggle navigation menu"
           >
+            {(unreadChats > 0 || unreadNotifs.length > 0) && (
+              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[#E1467A] rounded-full border border-[#1C1C1C]" />
+            )}
             {mobileMenuOpen ? (
               <X className="w-5 h-5 text-[#1C1C1C]" />
             ) : (

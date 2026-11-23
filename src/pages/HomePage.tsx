@@ -103,11 +103,11 @@ export const HomePage: React.FC<HomePageProps> = ({
             </p>
 
             {/* Action Buttons: GET STARTED - IT'S FREE! (Takes to Login Modal) */}
-            <div className="flex flex-wrap items-center gap-3.5 pt-2">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 pt-2 w-full">
               <button
                 type="button"
                 onClick={onOpenAuth}
-                className="px-8 py-4 sm:py-4.5 rounded-full border-3 border-[#1C1C1C] bg-[#F2A93B] hover:bg-[#e49b2f] font-head font-extrabold text-base sm:text-lg text-[#1C1C1C] shadow-[5px_5px_0px_#1C1C1C] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[7px_7px_0px_#1C1C1C] active:translate-x-0.5 active:translate-y-0.5 transition flex items-center gap-2.5 cursor-pointer"
+                className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4.5 rounded-full border-3 border-[#1C1C1C] bg-[#F2A93B] hover:bg-[#e49b2f] font-head font-extrabold text-base sm:text-lg text-[#1C1C1C] shadow-[4px_4px_0px_#1C1C1C] sm:shadow-[5px_5px_0px_#1C1C1C] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[7px_7px_0px_#1C1C1C] active:translate-x-0.5 active:translate-y-0.5 transition flex items-center justify-center gap-2.5 cursor-pointer"
               >
                 <span>GET STARTED - IT'S FREE!</span>
                 <ArrowRight className="w-5 h-5 stroke-[2.5]" />
@@ -119,27 +119,29 @@ export const HomePage: React.FC<HomePageProps> = ({
                   onSelectCategoryFilter('All');
                   setActiveTab('marketplace');
                 }}
-                className="px-7 py-4 rounded-full border-2.5 border-[#1C1C1C] bg-white font-head font-extrabold text-sm sm:text-base text-[#1C1C1C] shadow-[4px_4px_0px_#1C1C1C] hover:bg-[#FFF9E6] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_5px_0px_#1C1C1C] active:translate-x-0.5 active:translate-y-0.5 transition flex items-center gap-2"
+                className="w-full sm:w-auto px-6 sm:px-7 py-3.5 sm:py-4 rounded-full border-2.5 border-[#1C1C1C] bg-white font-head font-extrabold text-sm sm:text-base text-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] sm:shadow-[4px_4px_0px_#1C1C1C] hover:bg-[#FFF9E6] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_5px_0px_#1C1C1C] active:translate-x-0.5 active:translate-y-0.5 transition flex items-center justify-center gap-2"
               >
                 <span>Explore Marketplace</span>
               </button>
 
-              <button
-                type="button"
-                onClick={onOpenSellModal}
-                className="px-7 py-4 rounded-full border-2.5 border-[#1C1C1C] bg-white font-head font-extrabold text-sm sm:text-base text-[#1C1C1C] shadow-[4px_4px_0px_#1C1C1C] hover:bg-[#FFF9E6] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_5px_0px_#1C1C1C] active:translate-x-0.5 active:translate-y-0.5 transition flex items-center gap-2"
-              >
-                <PlusCircle className="w-4 h-4 sm:w-5 sm:h-5 text-[#F2A93B]" />
-                <span>Sell an Item</span>
-              </button>
+              <div className="grid grid-cols-2 gap-2.5 w-full sm:w-auto sm:flex sm:items-center sm:gap-3.5">
+                <button
+                  type="button"
+                  onClick={onOpenSellModal}
+                  className="px-4 sm:px-7 py-3 sm:py-4 rounded-full border-2.5 border-[#1C1C1C] bg-white font-head font-extrabold text-xs sm:text-base text-[#1C1C1C] shadow-[2.5px_2.5px_0px_#1C1C1C] sm:shadow-[4px_4px_0px_#1C1C1C] hover:bg-[#FFF9E6] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_5px_0px_#1C1C1C] active:translate-x-0.5 active:translate-y-0.5 transition flex items-center justify-center gap-1.5"
+                >
+                  <PlusCircle className="w-4 h-4 sm:w-5 sm:h-5 text-[#F2A93B]" />
+                  <span>Sell an Item</span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setActiveTab('wanted')}
-                className="px-6 py-4 rounded-full border-2.5 border-[#1C1C1C] bg-white font-bold text-sm text-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] hover:bg-[#FFF9E6] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[4px_4px_0px_#1C1C1C] active:translate-x-0.5 active:translate-y-0.5 transition"
-              >
-                Wanted Board →
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('wanted')}
+                  className="px-4 sm:px-6 py-3 sm:py-4 rounded-full border-2.5 border-[#1C1C1C] bg-white font-bold text-xs sm:text-sm text-[#1C1C1C] shadow-[2.5px_2.5px_0px_#1C1C1C] sm:shadow-[3px_3px_0px_#1C1C1C] hover:bg-[#FFF9E6] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[4px_4px_0px_#1C1C1C] active:translate-x-0.5 active:translate-y-0.5 transition flex items-center justify-center"
+                >
+                  Wanted Board →
+                </button>
+              </div>
             </div>
           </div>
 
@@ -169,7 +171,7 @@ export const HomePage: React.FC<HomePageProps> = ({
       </section>
 
       {/* ─── 2. CONTINUOUS SLIDING TICKER (COVERS ENTIRE WIDTH OF SITE, INCREASED HEIGHT & TEXT) ─── */}
-      <div className="w-screen relative left-1/2 -translate-x-1/2 overflow-hidden border-y-3 border-[#1C1C1C] bg-[#FFF9E6] py-5 sm:py-6 shadow-[3px_3px_0px_#1C1C1C]">
+      <div className="w-full overflow-hidden border-y-3 border-[#1C1C1C] bg-[#FFF9E6] py-5 sm:py-6 shadow-[3px_3px_0px_#1C1C1C]">
         <div className="animate-marquee flex items-center gap-10 text-sm sm:text-base md:text-lg font-black text-[#1C1C1C] tracking-wider whitespace-nowrap select-none hover:[animation-play-state:paused]">
           <span className="flex items-center gap-2.5">
             <span className="w-3 h-3 rounded-full bg-[#F97316] border border-[#1C1C1C]" /> ZERO COMMISSION (₹0 FEES)

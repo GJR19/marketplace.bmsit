@@ -736,7 +736,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         placeholder="At least 6 characters"
-                        className="w-full p-2.5 rounded-xl border-2 border-[#1C1C1C] bg-[#FFFBF5] shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                        className="w-full p-2.5 text-base sm:text-xs rounded-xl border-2 border-[#1C1C1C] bg-[#FFFBF5] shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                       />
                     </div>
                     <div>
@@ -750,7 +750,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                         value={confirmNewPassword}
                         onChange={(e) => setConfirmNewPassword(e.target.value)}
                         placeholder="Re-enter new password"
-                        className="w-full p-2.5 rounded-xl border-2 border-[#1C1C1C] bg-[#FFFBF5] shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                        className="w-full p-2.5 text-base sm:text-xs rounded-xl border-2 border-[#1C1C1C] bg-[#FFFBF5] shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
                       />
                     </div>
                   </div>
