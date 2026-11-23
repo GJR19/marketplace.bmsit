@@ -772,8 +772,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* Modal Branding Header */}
         <div className="flex items-center gap-2.5 mb-5">
-          <div className="w-10 h-10 rounded-xl bg-[#F2A93B] border-2 border-[#1C1C1C] flex items-center justify-center font-bold text-base shadow-[2px_2px_0px_#1C1C1C]">
-            🎓
+          <div className="w-10 h-10 rounded-xl bg-[#F2A93B] border-2 border-[#1C1C1C] flex items-center justify-center shadow-[2px_2px_0px_#1C1C1C]">
+            <svg
+              className="w-5 h-5 text-[#1C1C1C]"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7" />
+              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+              <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4" />
+              <path d="M2 7h20" />
+              <circle cx="12" cy="7" r="1.5" fill="#1C1C1C" />
+            </svg>
           </div>
           <div>
             <div className="flex items-center gap-2">
