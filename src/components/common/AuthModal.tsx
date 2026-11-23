@@ -22,7 +22,7 @@ import { supabase, profileToStudent } from '../../lib/supabase';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialMode?: 'signin' | 'register' | 'forgot';
+  initialMode?: 'signin' | 'register' | 'forgot' | 'resetPassword';
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -32,7 +32,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 }) => {
   const { currentUser, setCurrentUser, registerUser, pushToast, triggerConfetti, students } = useApp();
 
-  const [mode, setMode] = useState<'signin' | 'register' | 'verify' | 'forgot'>(initialMode);
+  const [mode, setMode] = useState<'signin' | 'register' | 'verify' | 'forgot' | 'resetPassword'>(initialMode);
   const [loading, setLoading] = useState(false);
 
   // Sign In state
@@ -58,9 +58,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [pendingData, setPendingData] = useState<any>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Forgot password state
+  // Forgot & Reset password state
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSubmitted, setForgotSubmitted] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [recoveryOtp, setRecoveryOtp] = useState('');
+  const [showOtpRecovery, setShowOtpRecovery] = useState(false);
 
   // Clear Sign-In fields
   const resetSignInForm = () => {
@@ -85,6 +89,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const switchToSignIn = () => {
     resetSignInForm();
     resetRegisterForm();
+    setNewPassword('');
+    setConfirmNewPassword('');
+    setRecoveryOtp('');
+    setShowOtpRecovery(false);
     setMode('signin');
   };
 
@@ -104,6 +112,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setPendingData(null);
       setForgotEmail('');
       setForgotSubmitted(false);
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setRecoveryOtp('');
+      setShowOtpRecovery(false);
       setMode(initialMode);
     }
   }, [isOpen, initialMode]);
@@ -550,7 +562,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo: `${window.location.origin}/#type=recovery`,
       });
 
       if (error) {
@@ -561,6 +573,131 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
     } catch (err: any) {
       pushToast(err.message || 'Failed to request reset.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Set New Password (when arriving via reset link or authenticated recovery)
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      pushToast('Password should be at least 6 characters.', 'warning');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      pushToast('Passwords do not match.', 'error');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) {
+        pushToast(error.message, 'error');
+        setLoading(false);
+        return;
+      }
+
+      // Clear recovery tokens from address bar
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+
+      // Hydrate student profile
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (profile) {
+          setCurrentUser(profileToStudent(profile));
+        }
+      }
+
+      triggerConfetti();
+      pushToast('Password updated successfully! Welcome back.', 'success');
+      onClose();
+    } catch (err: any) {
+      pushToast(err.message || 'Failed to update password.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Verify Recovery OTP Code
+  const handleVerifyRecoveryOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanEmail = forgotEmail.trim().toLowerCase();
+    const cleanToken = recoveryOtp.trim();
+
+    if (!cleanEmail.endsWith('@bmsit.in')) {
+      pushToast('Please enter your valid @bmsit.in college email.', 'warning');
+      return;
+    }
+    if (cleanToken.length < 6 || cleanToken.length > 8) {
+      pushToast('Please enter a valid recovery code received in email.', 'warning');
+      return;
+    }
+    if (newPassword.length < 6) {
+      pushToast('New password should be at least 6 characters.', 'warning');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      pushToast('Passwords do not match.', 'error');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // 1. Verify OTP code with recovery type
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: cleanEmail,
+        token: cleanToken,
+        type: 'recovery',
+      });
+
+      if (error) {
+        pushToast(error.message || 'Invalid or expired recovery code.', 'error');
+        setLoading(false);
+        return;
+      }
+
+      // 2. Set new password
+      const { error: updateErr } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (updateErr) {
+        pushToast(updateErr.message || 'Failed to set new password.', 'error');
+        setLoading(false);
+        return;
+      }
+
+      // 3. Hydrate profile
+      if (data.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profile) {
+          setCurrentUser(profileToStudent(profile));
+        }
+      }
+
+      triggerConfetti();
+      pushToast('Password updated successfully! Welcome back.', 'success');
+      onClose();
+    } catch (err: any) {
+      pushToast(err.message || 'Recovery failed.', 'error');
     } finally {
       setLoading(false);
     }
@@ -597,7 +734,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {/* Tabs */}
-        {mode !== 'verify' && mode !== 'forgot' && (
+        {mode !== 'verify' && mode !== 'forgot' && mode !== 'resetPassword' && (
           <div className="grid grid-cols-2 p-1 bg-[#FFF9E6] rounded-xl border-2 border-[#1C1C1C] mb-5 shadow-[2px_2px_0px_#1C1C1C]">
             <button
               type="button"
@@ -960,7 +1097,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </form>
         )}
 
-        {/* 4. FORGOT PASSWORD */}
+        {/* 4. FORGOT PASSWORD REQUEST */}
         {mode === 'forgot' && (
           <div className="space-y-4">
             <div className="flex items-center gap-2">
@@ -971,37 +1108,115 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
 
             {forgotSubmitted ? (
-              <div className="p-4 bg-[#FFF9E6] rounded-xl border-2 border-[#1C1C1C] text-xs space-y-2">
-                <div className="flex items-center gap-1.5 font-bold text-emerald-800">
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Password reset link sent!</span>
+              <div className="space-y-3">
+                <div className="p-4 bg-[#FFF9E6] rounded-xl border-2 border-[#1C1C1C] text-xs space-y-2">
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-800">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Password reset email dispatched!</span>
+                  </div>
+                  <p className="text-neutral-700">
+                    We sent a secure password reset link to{' '}
+                    <span className="font-mono font-bold text-[#1C1C1C]">{forgotEmail}</span>.
+                    Click the link in your email to choose a new password.
+                  </p>
                 </div>
-                <p className="text-neutral-700">
-                  Check <span className="font-mono font-bold">{forgotEmail}</span> for a secure password reset link.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForgotSubmitted(false);
-                    switchToSignIn();
-                  }}
-                  className="mt-2 px-3 py-1 bg-[#F2A93B] border border-[#1C1C1C] rounded-lg font-bold cursor-pointer"
-                >
-                  Return to Sign In
-                </button>
+
+                {!showOtpRecovery ? (
+                  <div className="p-3 bg-white rounded-xl border-2 border-[#1C1C1C] text-xs flex items-center justify-between">
+                    <span className="text-neutral-600">Got an OTP code in email?</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowOtpRecovery(true)}
+                      className="font-bold underline text-[#1C1C1C] hover:text-[#F2A93B] cursor-pointer"
+                    >
+                      Enter OTP Code →
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleVerifyRecoveryOtp} className="p-3.5 bg-white rounded-xl border-2 border-[#1C1C1C] space-y-3">
+                    <div className="text-xs font-bold text-[#1C1C1C]">
+                      Reset using Email OTP Code
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-neutral-700 mb-1">
+                        Recovery OTP Code *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={8}
+                        value={recoveryOtp}
+                        onChange={(e) => setRecoveryOtp(e.target.value.replace(/\D/g, ''))}
+                        className="w-full px-3 py-1.5 text-xs font-mono font-bold rounded-lg border border-[#1C1C1C]"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[11px] font-bold text-neutral-700 mb-1">
+                          New Password *
+                        </label>
+                        <input
+                          type="password"
+                          required
+                          minLength={6}
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          className="w-full px-2 py-1.5 text-xs rounded-lg border border-[#1C1C1C]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-neutral-700 mb-1">
+                          Confirm Password *
+                        </label>
+                        <input
+                          type="password"
+                          required
+                          minLength={6}
+                          value={confirmNewPassword}
+                          onChange={(e) => setConfirmNewPassword(e.target.value)}
+                          className="w-full px-2 py-1.5 text-xs rounded-lg border border-[#1C1C1C]"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full py-2 text-xs font-bold rounded-lg border border-[#1C1C1C] bg-[#F2A93B] hover:bg-[#e49b2f] cursor-pointer disabled:opacity-50"
+                    >
+                      {loading ? 'Verifying...' : 'Set New Password & Sign In'}
+                    </button>
+                  </form>
+                )}
+
+                <div className="pt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgotSubmitted(false);
+                      setShowOtpRecovery(false);
+                      switchToSignIn();
+                    }}
+                    className="text-xs font-bold text-neutral-500 hover:text-[#1C1C1C] hover:underline cursor-pointer"
+                  >
+                    ← Back to Sign In
+                  </button>
+                </div>
               </div>
             ) : (
               <form onSubmit={handleForgotSubmit} className="space-y-3">
                 <p className="text-xs text-neutral-600">
                   Enter your registered BMSIT email address to receive password instructions.
                 </p>
-                <input
-                  type="email"
-                  required
-                  value={forgotEmail}
-                  onChange={(e) => setForgotEmail(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C]"
-                />
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
+                  <input
+                    type="email"
+                    required
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                  />
+                </div>
                 <div className="flex items-center justify-between pt-2">
                   <button
                     type="button"
@@ -1021,6 +1236,85 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </form>
             )}
           </div>
+        )}
+
+        {/* 5. RESET PASSWORD / NEW PASSWORD FORM */}
+        {mode === 'resetPassword' && (
+          <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-[#F2A93B] border-2 border-[#1C1C1C] flex items-center justify-center shadow-[2px_2px_0px_#1C1C1C]">
+                <KeyRound className="w-5 h-5 text-[#1C1C1C]" />
+              </div>
+              <div>
+                <h3 className="font-head text-base font-bold text-[#1C1C1C]">
+                  Set New Password
+                </h3>
+                <p className="text-xs text-neutral-600">
+                  Enter your new password below to secure your BMSIT account.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-[#1C1C1C] mb-1">
+                  New Password *
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#1C1C1C] mb-1">
+                  Confirm New Password *
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={switchToSignIn}
+                className="text-xs text-neutral-500 hover:underline cursor-pointer"
+              >
+                Back to Sign In
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-5 py-2.5 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#e49b2f] transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <span>Update Password & Log In</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         )}
       </div>
     </div>

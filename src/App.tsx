@@ -5,6 +5,7 @@ import { Footer } from './components/layout/Footer';
 import { ToastContainer } from './components/common/ToastContainer';
 import { AuthModal } from './components/common/AuthModal';
 import { ProductDetailModal } from './components/product/ProductDetailModal';
+import { supabase } from './lib/supabase';
 
 import { HomePage } from './pages/HomePage';
 import { MarketplacePage } from './pages/MarketplacePage';
@@ -61,10 +62,44 @@ const MainApp: React.FC = () => {
     }
   }, [products]);
 
-  // Modals
+  // Modals & Auth Mode State
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'signin' | 'register' | 'forgot' | 'resetPassword'>('signin');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+
+  // Helper to open auth modal in specific mode
+  const handleOpenAuth = (mode: 'signin' | 'register' | 'forgot' | 'resetPassword' = 'signin') => {
+    setAuthModalMode(mode);
+    setAuthModalOpen(true);
+  };
+
+  // Detect Supabase Password Recovery from URL or Auth State
+  useEffect(() => {
+    const checkRecovery = () => {
+      const hash = window.location.hash || '';
+      const search = window.location.search || '';
+      if (hash.includes('type=recovery') || search.includes('type=recovery')) {
+        setAuthModalMode('resetPassword');
+        setAuthModalOpen(true);
+      }
+    };
+
+    checkRecovery();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setAuthModalMode('resetPassword');
+        setAuthModalOpen(true);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Open Product Details Modal
   const handleOpenDetails = (product: Product) => {
@@ -100,7 +135,7 @@ const MainApp: React.FC = () => {
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onOpenAuth={() => setAuthModalOpen(true)}
+        onOpenAuth={() => handleOpenAuth('signin')}
         onOpenSellModal={handleOpenSell}
         onOpenProduct={handleOpenDetails}
         onSelectDashboardTab={(tab) => {
@@ -117,7 +152,7 @@ const MainApp: React.FC = () => {
             onOpenDetails={handleOpenDetails}
             onSelectCategoryFilter={(cat) => setSelectedCategory(cat)}
             onOpenSellModal={handleOpenSell}
-            onOpenAuth={() => setAuthModalOpen(true)}
+            onOpenAuth={() => handleOpenAuth('signin')}
           />
         )}
 
@@ -137,7 +172,7 @@ const MainApp: React.FC = () => {
               if (convId) setActiveChatId(convId);
               setActiveTab('chats');
             }}
-            onOpenAuth={() => setAuthModalOpen(true)}
+            onOpenAuth={() => handleOpenAuth('signin')}
           />
         )}
 
@@ -169,7 +204,7 @@ const MainApp: React.FC = () => {
             onTabChange={setDashboardTab}
             onOpenSellModal={handleOpenSell}
             onOpenProduct={handleOpenDetails}
-            onOpenAuth={() => setAuthModalOpen(true)}
+            onOpenAuth={() => handleOpenAuth('signin')}
           />
         )}
 
@@ -185,13 +220,17 @@ const MainApp: React.FC = () => {
       {/* Footer */}
       <Footer
         setActiveTab={setActiveTab}
-        onOpenAuth={() => setAuthModalOpen(true)}
+        onOpenAuth={() => handleOpenAuth('signin')}
       />
 
       {/* Auth & Personas Modal */}
       <AuthModal
         isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
+        onClose={() => {
+          setAuthModalOpen(false);
+          setAuthModalMode('signin');
+        }}
+        initialMode={authModalMode}
       />
 
       {/* Product Detail Modal */}
@@ -201,7 +240,7 @@ const MainApp: React.FC = () => {
         onClose={() => setDetailModalOpen(false)}
         onOpenChatWithSeller={handleOpenChatWithSeller}
         onOpenProduct={handleOpenDetails}
-        onOpenAuth={() => setAuthModalOpen(true)}
+        onOpenAuth={() => handleOpenAuth('signin')}
       />
 
       {/* Global Alerts & Toast Container (Rendered on top of modals & backdrops) */}
