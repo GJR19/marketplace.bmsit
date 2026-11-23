@@ -780,9 +780,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <span className="font-head text-xl font-bold text-[#1C1C1C]">
                 marketplace.bmsit
               </span>
-              <span className="nb-sticker text-[10px] py-0.5 px-2 bg-[#FFE082]">
-                VERIFIED AUTH
-              </span>
             </div>
             <p className="text-xs text-[#1C1C1C]/70">
               Student-only verified marketplace for BMSIT & Management
@@ -1165,95 +1162,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
 
             {forgotSubmitted ? (
-              <div className="space-y-3">
-                <div className="p-4 bg-[#FFF9E6] rounded-xl border-2 border-[#1C1C1C] text-xs space-y-2">
+              <div className="space-y-4">
+                <div className="p-4 bg-[#FFF9E6] rounded-xl border-2 border-[#1C1C1C] text-xs space-y-2 shadow-[2px_2px_0px_#1C1C1C]">
                   <div className="flex items-center gap-1.5 font-bold text-emerald-800">
-                    <CheckCircle2 className="w-4 h-4" />
+                    <CheckCircle2 className="w-4 h-4 text-emerald-700" />
                     <span>Password reset email dispatched!</span>
                   </div>
-                  <p className="text-neutral-700">
+                  <p className="text-neutral-700 leading-relaxed">
                     We sent a secure password reset link to{' '}
                     <span className="font-mono font-bold text-[#1C1C1C]">{forgotEmail}</span>.
-                    Click the link in your email to choose a new password.
+                    Please check your BMSIT student email (including Spam folder) and click the link to choose a new password.
                   </p>
                 </div>
-
-                {!showOtpRecovery ? (
-                  <div className="p-3 bg-white rounded-xl border-2 border-[#1C1C1C] text-xs flex items-center justify-between">
-                    <span className="text-neutral-600">Got an OTP code in email?</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowOtpRecovery(true)}
-                      className="font-bold underline text-[#1C1C1C] hover:text-[#F2A93B] cursor-pointer"
-                    >
-                      Enter OTP Code →
-                    </button>
-                  </div>
-                ) : (
-                  <form onSubmit={handleVerifyRecoveryOtp} className="p-3.5 bg-white rounded-xl border-2 border-[#1C1C1C] space-y-3">
-                    <div className="text-xs font-bold text-[#1C1C1C]">
-                      Reset using Email OTP Code
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-neutral-700 mb-1">
-                        Recovery OTP Code *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        maxLength={8}
-                        value={recoveryOtp}
-                        onChange={(e) => setRecoveryOtp(e.target.value.replace(/\D/g, ''))}
-                        className="w-full px-3 py-1.5 text-xs font-mono font-bold rounded-lg border border-[#1C1C1C]"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[11px] font-bold text-neutral-700 mb-1">
-                          New Password *
-                        </label>
-                        <input
-                          type="password"
-                          required
-                          minLength={6}
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          className="w-full px-2 py-1.5 text-xs rounded-lg border border-[#1C1C1C]"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-neutral-700 mb-1">
-                          Confirm Password *
-                        </label>
-                        <input
-                          type="password"
-                          required
-                          minLength={6}
-                          value={confirmNewPassword}
-                          onChange={(e) => setConfirmNewPassword(e.target.value)}
-                          className="w-full px-2 py-1.5 text-xs rounded-lg border border-[#1C1C1C]"
-                        />
-                      </div>
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="w-full py-2 text-xs font-bold rounded-lg border border-[#1C1C1C] bg-[#F2A93B] hover:bg-[#e49b2f] cursor-pointer disabled:opacity-50"
-                    >
-                      {loading ? 'Verifying...' : 'Set New Password & Sign In'}
-                    </button>
-                  </form>
-                )}
 
                 <div className="pt-2 text-center">
                   <button
                     type="button"
                     onClick={() => {
                       setForgotSubmitted(false);
-                      setShowOtpRecovery(false);
                       switchToSignIn();
                     }}
-                    className="text-xs font-bold text-neutral-500 hover:text-[#1C1C1C] hover:underline cursor-pointer"
+                    className="px-4 py-2 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-white hover:bg-neutral-100 shadow-[2px_2px_0px_#1C1C1C] transition cursor-pointer"
                   >
                     ← Back to Sign In
                   </button>
@@ -1313,41 +1242,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
 
             <div className="space-y-3">
-              {showOtpRecovery && (
-                <>
-                  <div>
-                    <label className="block text-xs font-bold text-[#1C1C1C] mb-1">
-                      College Email *
-                    </label>
-                    <div className="relative">
-                      <Mail className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
-                      <input
-                        type="email"
-                        required
-                        value={resetEmail || forgotEmail}
-                        onChange={(e) => setResetEmail(e.target.value)}
-                        placeholder="your.usn@bmsit.in"
-                        className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-[#1C1C1C] mb-1">
-                      Recovery OTP Code from Email *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      maxLength={8}
-                      value={recoveryOtp}
-                      onChange={(e) => setRecoveryOtp(e.target.value.replace(/\D/g, ''))}
-                      className="w-full px-3 py-2 text-xs font-mono font-bold tracking-widest rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
-                    />
-                  </div>
-                </>
-              )}
-
               <div>
                 <label className="block text-xs font-bold text-[#1C1C1C] mb-1">
                   New Password *
