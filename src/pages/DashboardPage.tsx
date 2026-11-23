@@ -24,6 +24,7 @@ import {
   Camera,
   Upload,
   LogOut,
+  Mail,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Product, ProductCategory, WantedRequest } from '../types';
@@ -72,6 +73,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [updatingPassword, setUpdatingPassword] = useState(false);
+  const [sendingResetEmail, setSendingResetEmail] = useState(false);
 
   const handlePasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,10 +92,46 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
     setUpdatingPassword(true);
     try {
+      // 1. Check for active Supabase session
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        const { data: refreshRes } = await supabase.auth.refreshSession();
+        session = refreshRes?.session;
+      }
+
+      // If still no session, the user's session expired or is missing
+      if (!session) {
+        if (currentUser.email && currentUser.email.endsWith('@bmsit.in')) {
+          const { error: resetErr } = await supabase.auth.resetPasswordForEmail(currentUser.email, {
+            redirectTo: `${window.location.origin}/`,
+          });
+          if (!resetErr) {
+            pushToast(
+              `Session expired. We sent a secure password reset link to ${currentUser.email}. Please check your email!`,
+              'info'
+            );
+            return;
+          }
+        }
+
+        pushToast('Your session has expired. Please sign in to update your password.', 'warning');
+        onOpenAuth();
+        return;
+      }
+
+      // 2. Active session verified -> update password in Supabase
       const { error } = await supabase.auth.updateUser({
         password: newPassword,
       });
-      if (error) throw error;
+
+      if (error) {
+        if (error.message.toLowerCase().includes('session')) {
+          pushToast('Your session has expired. Please sign in to update your password.', 'warning');
+          onOpenAuth();
+          return;
+        }
+        throw error;
+      }
 
       pushToast('Password updated successfully!', 'success');
       setNewPassword('');
@@ -651,13 +689,39 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
               {/* Password Reset */}
               <div className="pt-4 border-t border-[#1C1C1C]/15 space-y-3">
-                <div>
-                  <h4 className="font-head font-bold text-base text-[#1C1C1C]">
-                    Password Reset
-                  </h4>
-                  <p className="text-xs text-neutral-500">
-                    Update your account password securely.
-                  </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h4 className="font-head font-bold text-base text-[#1C1C1C]">
+                      Password Reset
+                    </h4>
+                    <p className="text-xs text-neutral-500">
+                      Update your account password securely.
+                    </p>
+                  </div>
+                  {currentUser.email && (
+                    <button
+                      type="button"
+                      disabled={sendingResetEmail}
+                      onClick={async () => {
+                        setSendingResetEmail(true);
+                        try {
+                          const { error } = await supabase.auth.resetPasswordForEmail(currentUser.email, {
+                            redirectTo: `${window.location.origin}/`,
+                          });
+                          if (error) throw error;
+                          pushToast(`Password reset link sent to ${currentUser.email}!`, 'success');
+                        } catch (err: any) {
+                          pushToast(err.message || 'Failed to send reset link.', 'error');
+                        } finally {
+                          setSendingResetEmail(false);
+                        }
+                      }}
+                      className="text-xs font-bold text-[#2563EB] hover:underline cursor-pointer flex items-center gap-1 self-start sm:self-auto"
+                    >
+                      <Mail className="w-3.5 h-3.5" />
+                      <span>{sendingResetEmail ? 'Sending link...' : 'Or send reset link to email →'}</span>
+                    </button>
+                  )}
                 </div>
                 <form onSubmit={handlePasswordUpdate} className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">

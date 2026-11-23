@@ -258,6 +258,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               }
             }
           });
+      } else {
+        // If there is no active Supabase session in browser, clear stale ghost session
+        const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (parsed && parsed.id && parsed.id !== 'guest') {
+              localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+              setCurrentUserState(GUEST_STUDENT);
+            }
+          } catch {}
+        }
       }
     });
 
