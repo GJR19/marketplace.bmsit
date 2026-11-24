@@ -18,6 +18,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { parseUSN, BMSIT_BRANCH_MAP, USNParseResult } from '../../utils/usnParser';
 import { supabase, profileToStudent } from '../../lib/supabase';
+import { sendNewAccountAdminAlert } from '../../utils/emailAlerts';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -301,6 +302,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setLoading(false);
         return;
       }
+
+      // Dispatch automated alert email to gjr19atwork@gmail.com whenever a new account is created
+      sendNewAccountAdminAlert({
+        name: fullName.trim(),
+        email: cleanEmail,
+        usn: cleanUsn,
+        branch: finalBranch,
+        admissionYear: usnResult.admissionYearFull || 2024,
+        currentYear: usnResult.currentYear || '1st Year (Fresher)',
+      }).catch((alertErr) => console.warn('Admin alert email note:', alertErr));
 
       if (data.session && data.user) {
         // Immediate login when email confirmation is disabled in Supabase
