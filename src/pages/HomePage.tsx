@@ -190,7 +190,7 @@ export const HomePage: React.FC<HomePageProps> = ({
       </section>
 
       {/* ─── 2. CONTINUOUS SLIDING TICKER (COVERS ENTIRE WIDTH OF SITE, INCREASED HEIGHT & TEXT) ─── */}
-      <div className="w-full overflow-hidden border-y-3 border-[#1C1C1C] bg-[#FFF9E6] py-5 sm:py-6 shadow-[3px_3px_0px_#1C1C1C]">
+      <div className="w-screen relative left-1/2 -translate-x-1/2 overflow-hidden border-y-3 border-[#1C1C1C] bg-[#FFF9E6] py-5 sm:py-6 shadow-[3px_3px_0px_#1C1C1C]">
         <div className="animate-marquee flex items-center gap-10 text-sm sm:text-base md:text-lg font-black text-[#1C1C1C] tracking-wider whitespace-nowrap select-none hover:[animation-play-state:paused]">
           <span className="flex items-center gap-2.5">
             <span className="w-3 h-3 rounded-full bg-[#F97316] border border-[#1C1C1C]" /> ZERO COMMISSION (₹0 FEES)
