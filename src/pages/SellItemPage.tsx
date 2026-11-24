@@ -15,6 +15,14 @@ interface SellItemPageProps {
   onCancel: () => void;
 }
 
+const CATEGORY_DEFAULT_IMAGES: Record<ProductCategory, string> = {
+  Books: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=600&auto=format&fit=crop&q=80',
+  'Gadgets and Tech': 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=600&auto=format&fit=crop&q=80',
+  'Daily Gear': 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=600&auto=format&fit=crop&q=80',
+  'Dorm Essentials': 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=600&auto=format&fit=crop&q=80',
+  Other: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600&auto=format&fit=crop&q=80',
+};
+
 export const SellItemPage: React.FC<SellItemPageProps> = ({
   onSuccessRedirect,
   onCancel,
@@ -34,6 +42,7 @@ export const SellItemPage: React.FC<SellItemPageProps> = ({
   // Submission success dialog
   const [isSubmittedSuccess, setIsSubmittedSuccess] = useState(false);
   const [submittedProduct, setSubmittedProduct] = useState<Product | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const categories: ProductCategory[] = [
     'Books',
@@ -93,6 +102,16 @@ export const SellItemPage: React.FC<SellItemPageProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (uploadingImage) {
+      pushToast('Photo is still uploading, please wait a moment...', 'info');
+      return;
+    }
+
+    if (currentUser.id === 'guest' || !currentUser.email) {
+      pushToast('Please sign in with your verified @bmsit.in account to list items.', 'warning');
+      return;
+    }
+
     if (currentUser.status === 'suspended') {
       pushToast('Your account is currently suspended. You cannot post listings.', 'error');
       return;
@@ -108,37 +127,45 @@ export const SellItemPage: React.FC<SellItemPageProps> = ({
       return;
     }
 
-    if (!originalPrice || Number(originalPrice) <= 0) {
-      pushToast('Please enter the Original MRP in INR (required).', 'warning');
-      return;
+    const finalOriginalPrice =
+      originalPrice && Number(originalPrice) > 0
+        ? Number(originalPrice)
+        : Number(price);
+
+    const finalImages =
+      images.length > 0
+        ? images.slice(0, 3)
+        : [CATEGORY_DEFAULT_IMAGES[category] || CATEGORY_DEFAULT_IMAGES.Other];
+
+    setIsSubmitting(true);
+    try {
+      const created = addProduct({
+        title: title.trim(),
+        category,
+        price: Number(price),
+        originalPrice: finalOriginalPrice,
+        images: finalImages,
+        sellerId: currentUser.id,
+        sellerName: currentUser.name,
+        sellerUSN: currentUser.usn,
+        sellerBranch: currentUser.branch,
+        sellerAdmissionYear: currentUser.admissionYear,
+        sellerCurrentYear: currentUser.currentYear,
+        sellerAvatar: currentUser.avatar,
+        status: 'pending_approval',
+        handoverLocation,
+        contactPreference: 'In-app Chat',
+        isNegotiable: false,
+      });
+
+      setSubmittedProduct(created);
+      setIsSubmittedSuccess(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err: any) {
+      pushToast(err?.message || 'Error submitting listing. Please try again.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    if (images.length === 0) {
-      pushToast('Please upload at least one photo of your item.', 'warning');
-      return;
-    }
-
-    const created = addProduct({
-      title: title.trim(),
-      category,
-      price: Number(price),
-      originalPrice: Number(originalPrice),
-      images: images.slice(0, 3),
-      sellerId: currentUser.id,
-      sellerName: currentUser.name,
-      sellerUSN: currentUser.usn,
-      sellerBranch: currentUser.branch,
-      sellerAdmissionYear: currentUser.admissionYear,
-      sellerCurrentYear: currentUser.currentYear,
-      sellerAvatar: currentUser.avatar,
-      status: 'pending_approval',
-      handoverLocation,
-      contactPreference: 'In-app Chat',
-      isNegotiable: false,
-    });
-
-    setSubmittedProduct(created);
-    setIsSubmittedSuccess(true);
   };
 
   return (
@@ -241,15 +268,14 @@ export const SellItemPage: React.FC<SellItemPageProps> = ({
 
               <div>
                 <label className="block text-xs font-bold text-[#1C1C1C] mb-1.5">
-                  Original MRP (₹ INR) *
+                  Original MRP (₹ INR) <span className="text-neutral-500 font-normal">(Optional, defaults to selling price)</span>
                 </label>
                 <input
                   type="number"
-                  required
                   min={1}
                   value={originalPrice}
                   onChange={(e) => setOriginalPrice(e.target.value ? Number(e.target.value) : '')}
-                  placeholder="e.g. 1595"
+                  placeholder="e.g. 1595 (or leave blank)"
                   className="w-full p-3 text-xs sm:text-sm rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2.5px_2.5px_0px_#1C1C1C] focus:outline-none"
                 />
               </div>
@@ -283,7 +309,7 @@ export const SellItemPage: React.FC<SellItemPageProps> = ({
                   />
                 </label>
                 <span className="text-xs text-neutral-600 font-medium">
-                  Direct photo upload required. No image URLs.
+                  {images.length === 0 ? 'Upload a photo or auto-use category placeholder.' : 'Direct photo upload from your device.'}
                 </span>
               </div>
             ) : (
@@ -363,18 +389,40 @@ export const SellItemPage: React.FC<SellItemPageProps> = ({
           {/* Submit Button */}
           <button
             type="submit"
-            className="w-full py-4 rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] font-head font-extrabold text-sm sm:text-base text-[#1C1C1C] shadow-[4px_4px_0px_#1C1C1C] hover:bg-[#e49b2f] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_5px_0px_#1C1C1C] active:translate-x-0.5 active:translate-y-0.5 transition flex items-center justify-center gap-2"
+            disabled={isSubmitting || uploadingImage}
+            className="w-full py-4 rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] font-head font-extrabold text-sm sm:text-base text-[#1C1C1C] shadow-[4px_4px_0px_#1C1C1C] hover:bg-[#e49b2f] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_5px_0px_#1C1C1C] active:translate-x-0.5 active:translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed transition flex items-center justify-center gap-2 cursor-pointer"
           >
-            <span>Submit Listing for Moderator Review</span>
-            <ArrowRight className="w-5 h-5" />
+            {isSubmitting ? (
+              <span>Submitting listing...</span>
+            ) : uploadingImage ? (
+              <span>Uploading photo...</span>
+            ) : (
+              <>
+                <span>Submit Listing for Moderator Review</span>
+                <ArrowRight className="w-5 h-5" />
+              </>
+            )}
           </button>
         </form>
       </div>
 
       {/* SUCCESS MODAL ON SUBMISSION */}
       {isSubmittedSuccess && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/55 backdrop-blur-xs">
-          <div className="w-full max-w-lg bg-[#FFFBF5] rounded-3xl border-3 border-[#1C1C1C] shadow-[7px_7px_0px_#1C1C1C] p-6 sm:p-8 text-center space-y-5 animate-in zoom-in-95">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+          <div className="relative w-full max-w-lg bg-[#FFFBF5] rounded-3xl border-3 border-[#1C1C1C] shadow-[7px_7px_0px_#1C1C1C] p-6 sm:p-8 text-center space-y-5 my-auto animate-in zoom-in-95">
+            {/* Top Close Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsSubmittedSuccess(false);
+                onSuccessRedirect();
+              }}
+              className="absolute top-4 right-4 p-2 rounded-xl border-2 border-[#1C1C1C] bg-white hover:bg-[#FFF9E6] transition shadow-[2px_2px_0px_#1C1C1C] text-[#1C1C1C] cursor-pointer"
+              title="Close and view postings"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
             <div className="w-16 h-16 rounded-2xl bg-[#FFE082] border-2 border-[#1C1C1C] flex items-center justify-center text-3xl mx-auto shadow-[3px_3px_0px_#1C1C1C]">
               🎉
             </div>
@@ -399,19 +447,20 @@ export const SellItemPage: React.FC<SellItemPageProps> = ({
                 <span>What happens next?</span>
               </div>
               <p className="text-neutral-700">
-                1. Your listing is submitted for safety verification by campus moderators.<br />
+                1. Your listing is verified by campus moderators.<br />
                 2. You can track its approval status under <strong>My Postings</strong> in your Student Dashboard.<br />
                 3. Once approved, BMSIT students can contact you directly through the built-in campus chat.
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
               <button
+                type="button"
                 onClick={() => {
                   setIsSubmittedSuccess(false);
                   onSuccessRedirect();
                 }}
-                className="px-6 py-2.5 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] shadow-[2.5px_2.5px_0px_#1C1C1C] hover:bg-[#e49b2f] transition"
+                className="w-full sm:w-auto px-6 py-3 text-xs sm:text-sm font-bold rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] shadow-[2.5px_2.5px_0px_#1C1C1C] hover:bg-[#e49b2f] transition cursor-pointer"
               >
                 Go to My Postings →
               </button>

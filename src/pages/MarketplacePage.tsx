@@ -409,16 +409,23 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({
                 None of your fellow students have listed this exact item right now. Try clearing filters or post a request on the Wanted Board!
               </p>
 
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-3">
+              <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 pt-3">
                 <button
                   onClick={clearAllFilters}
-                  className="px-4 py-2 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#FFF9E6]"
+                  className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#FFF9E6] transition active:translate-x-0.5 active:translate-y-0.5"
                 >
                   Clear All Filters
                 </button>
                 <button
+                  onClick={onOpenSellModal}
+                  className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] shadow-[2.5px_2.5px_0px_#1C1C1C] hover:bg-[#e49b2f] flex items-center justify-center gap-1.5 transition active:translate-x-0.5 active:translate-y-0.5"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>Post a Listing</span>
+                </button>
+                <button
                   onClick={onOpenWantedBoard}
-                  className="px-5 py-2 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#e49b2f]"
+                  className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#FFF9E6] flex items-center justify-center gap-1.5 transition active:translate-x-0.5 active:translate-y-0.5"
                 >
                   Post on Wanted Board 📌
                 </button>

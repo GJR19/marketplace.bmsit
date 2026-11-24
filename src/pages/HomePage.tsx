@@ -26,7 +26,8 @@ export const HomePage: React.FC<HomePageProps> = ({
   onOpenSellModal,
   onOpenAuth,
 }) => {
-  const { products } = useApp();
+  const { products, currentUser } = useApp();
+  const isLoggedIn = currentUser.id !== 'guest' && Boolean(currentUser.email) && currentUser.verified;
 
   // 4 Photographic Core Categories matching User Reference Image 4
   const categoriesList: {
@@ -102,27 +103,45 @@ export const HomePage: React.FC<HomePageProps> = ({
               The student-only peer exchange for BMSIT. Trade VTU textbooks, Casio scientific calculators, campus cycles, and dorm essentials with verified @bmsit.in peers. Zero delivery delay, ₹0 commission fees.
             </p>
 
-            {/* Action Buttons: GET STARTED - IT'S FREE! (Takes to Login Modal) */}
+            {/* Action Buttons: Context-aware CTA (Signed-in vs Guest) */}
             <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 pt-2 w-full">
-              <button
-                type="button"
-                onClick={onOpenAuth}
-                className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4.5 rounded-full border-3 border-[#1C1C1C] bg-[#F2A93B] hover:bg-[#e49b2f] font-head font-extrabold text-base sm:text-lg text-[#1C1C1C] shadow-[4px_4px_0px_#1C1C1C] sm:shadow-[5px_5px_0px_#1C1C1C] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[7px_7px_0px_#1C1C1C] active:translate-x-0.5 active:translate-y-0.5 transition flex items-center justify-center gap-2.5 cursor-pointer"
-              >
-                <span>GET STARTED - IT'S FREE!</span>
-                <ArrowRight className="w-5 h-5 stroke-[2.5]" />
-              </button>
+              {isLoggedIn ? (
+                /* Prominent Yellow Explore Marketplace CTA for Signed-in Students */
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelectCategoryFilter('All');
+                    setActiveTab('marketplace');
+                  }}
+                  className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4.5 rounded-full border-3 border-[#1C1C1C] bg-[#F2A93B] hover:bg-[#e49b2f] font-head font-extrabold text-base sm:text-lg text-[#1C1C1C] shadow-[4px_4px_0px_#1C1C1C] sm:shadow-[5px_5px_0px_#1C1C1C] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[7px_7px_0px_#1C1C1C] active:translate-x-0.5 active:translate-y-0.5 transition flex items-center justify-center gap-2.5 cursor-pointer"
+                >
+                  <span>Explore Marketplace</span>
+                  <ArrowRight className="w-5 h-5 stroke-[2.5]" />
+                </button>
+              ) : (
+                /* Guest Students: GET STARTED - IT'S FREE! + Explore Marketplace */
+                <>
+                  <button
+                    type="button"
+                    onClick={onOpenAuth}
+                    className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4.5 rounded-full border-3 border-[#1C1C1C] bg-[#F2A93B] hover:bg-[#e49b2f] font-head font-extrabold text-base sm:text-lg text-[#1C1C1C] shadow-[4px_4px_0px_#1C1C1C] sm:shadow-[5px_5px_0px_#1C1C1C] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[7px_7px_0px_#1C1C1C] active:translate-x-0.5 active:translate-y-0.5 transition flex items-center justify-center gap-2.5 cursor-pointer"
+                  >
+                    <span>GET STARTED - IT'S FREE!</span>
+                    <ArrowRight className="w-5 h-5 stroke-[2.5]" />
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  onSelectCategoryFilter('All');
-                  setActiveTab('marketplace');
-                }}
-                className="w-full sm:w-auto px-6 sm:px-7 py-3.5 sm:py-4 rounded-full border-2.5 border-[#1C1C1C] bg-white font-head font-extrabold text-sm sm:text-base text-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] sm:shadow-[4px_4px_0px_#1C1C1C] hover:bg-[#FFF9E6] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_5px_0px_#1C1C1C] active:translate-x-0.5 active:translate-y-0.5 transition flex items-center justify-center gap-2"
-              >
-                <span>Explore Marketplace</span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelectCategoryFilter('All');
+                      setActiveTab('marketplace');
+                    }}
+                    className="w-full sm:w-auto px-6 sm:px-7 py-3.5 sm:py-4 rounded-full border-2.5 border-[#1C1C1C] bg-white font-head font-extrabold text-sm sm:text-base text-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] sm:shadow-[4px_4px_0px_#1C1C1C] hover:bg-[#FFF9E6] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_5px_0px_#1C1C1C] active:translate-x-0.5 active:translate-y-0.5 transition flex items-center justify-center gap-2"
+                  >
+                    <span>Explore Marketplace</span>
+                  </button>
+                </>
+              )}
 
               <div className="grid grid-cols-2 gap-2.5 w-full sm:w-auto sm:flex sm:items-center sm:gap-3.5">
                 <button

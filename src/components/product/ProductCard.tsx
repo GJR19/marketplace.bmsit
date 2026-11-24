@@ -36,7 +36,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       {/* Product Image Container */}
       <div className="relative aspect-4/3 w-full bg-[#FFFBF5] border-b-2 border-[#1C1C1C] overflow-hidden">
         <img
-          src={product.images[0]}
+          src={product.images?.[0] || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=600&auto=format&fit=crop&q=80'}
           alt={product.title}
           className={`w-full h-full object-cover transition-transform duration-300 ${
             isSold ? 'grayscale-40 contrast-90' : 'group-hover:scale-103'

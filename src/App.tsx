@@ -214,7 +214,10 @@ const MainApp: React.FC = () => {
 
         {activeTab === 'sell' && (
           <SellItemPage
-            onSuccessRedirect={() => setActiveTab('dashboard')}
+            onSuccessRedirect={() => {
+              setDashboardTab('postings');
+              setActiveTab('dashboard');
+            }}
             onCancel={() => setActiveTab('marketplace')}
           />
         )}

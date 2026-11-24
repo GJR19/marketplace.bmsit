@@ -34,6 +34,19 @@ export interface ToastMessage {
 const isUUID = (str?: string): boolean =>
   Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
 
+const generateUUID = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    try {
+      return crypto.randomUUID();
+    } catch {}
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 interface AppContextType {
   products: Product[];
   students: Student[];
@@ -654,7 +667,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addProduct = (
     productData: Omit<Product, 'id' | 'postedDate' | 'updatedDate' | 'viewsCount' | 'likesCount'>
   ): Product => {
-    const productId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'prod-' + Date.now();
+    const productId = generateUUID();
     const newProduct: Product = {
       ...productData,
       id: productId,
@@ -668,7 +681,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setProducts((prev) => [newProduct, ...prev]);
 
     // Insert into Supabase (triggers trg_notify_admin_new_product)
-    if (currentUser?.id) {
+    if (isUUID(currentUser?.id) && currentUser.id !== 'guest') {
       supabase
         .from('products')
         .insert({

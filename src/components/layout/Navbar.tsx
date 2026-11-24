@@ -139,7 +139,6 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'home', label: 'Home', icon: Store },
     { id: 'marketplace', label: 'Explore Catalogue', icon: Compass, badge: `${approvedCount}` },
     { id: 'wanted', label: 'Wanted Board', icon: FileQuestion },
-    { id: 'chats', label: 'Student Chats', icon: MessageSquare, badge: unreadChats > 0 ? `${unreadChats}` : undefined },
     { id: 'wishlist', label: 'Saved Wishlist', icon: Heart, badge: wishlist.length > 0 ? `${wishlist.length}` : undefined },
     { id: 'terms', label: 'Terms & Rules', icon: ShieldCheck },
   ];
