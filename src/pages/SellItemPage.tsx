@@ -15,14 +15,6 @@ interface SellItemPageProps {
   onCancel: () => void;
 }
 
-const CATEGORY_DEFAULT_IMAGES: Record<ProductCategory, string> = {
-  Books: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=600&auto=format&fit=crop&q=80',
-  'Gadgets and Tech': 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=600&auto=format&fit=crop&q=80',
-  'Daily Gear': 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=600&auto=format&fit=crop&q=80',
-  'Dorm Essentials': 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=600&auto=format&fit=crop&q=80',
-  Other: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600&auto=format&fit=crop&q=80',
-};
-
 export const SellItemPage: React.FC<SellItemPageProps> = ({
   onSuccessRedirect,
   onCancel,
@@ -127,15 +119,15 @@ export const SellItemPage: React.FC<SellItemPageProps> = ({
       return;
     }
 
-    const finalOriginalPrice =
-      originalPrice && Number(originalPrice) > 0
-        ? Number(originalPrice)
-        : Number(price);
+    if (!originalPrice || Number(originalPrice) <= 0) {
+      pushToast('Please enter the Original MRP in INR (compulsory).', 'warning');
+      return;
+    }
 
-    const finalImages =
-      images.length > 0
-        ? images.slice(0, 3)
-        : [CATEGORY_DEFAULT_IMAGES[category] || CATEGORY_DEFAULT_IMAGES.Other];
+    if (images.length === 0) {
+      pushToast('Please upload at least one photo of your item (compulsory).', 'warning');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -143,8 +135,8 @@ export const SellItemPage: React.FC<SellItemPageProps> = ({
         title: title.trim(),
         category,
         price: Number(price),
-        originalPrice: finalOriginalPrice,
-        images: finalImages,
+        originalPrice: Number(originalPrice),
+        images: images.slice(0, 3),
         sellerId: currentUser.id,
         sellerName: currentUser.name,
         sellerUSN: currentUser.usn,
@@ -268,14 +260,15 @@ export const SellItemPage: React.FC<SellItemPageProps> = ({
 
               <div>
                 <label className="block text-xs font-bold text-[#1C1C1C] mb-1.5">
-                  Original MRP (₹ INR) <span className="text-neutral-500 font-normal">(Optional, defaults to selling price)</span>
+                  Original MRP (₹ INR) *
                 </label>
                 <input
                   type="number"
+                  required
                   min={1}
                   value={originalPrice}
                   onChange={(e) => setOriginalPrice(e.target.value ? Number(e.target.value) : '')}
-                  placeholder="e.g. 1595 (or leave blank)"
+                  placeholder="e.g. 1595"
                   className="w-full p-3 text-xs sm:text-sm rounded-xl border-2 border-[#1C1C1C] bg-white shadow-[2.5px_2.5px_0px_#1C1C1C] focus:outline-none"
                 />
               </div>
@@ -309,7 +302,7 @@ export const SellItemPage: React.FC<SellItemPageProps> = ({
                   />
                 </label>
                 <span className="text-xs text-neutral-600 font-medium">
-                  {images.length === 0 ? 'Upload a photo or auto-use category placeholder.' : 'Direct photo upload from your device.'}
+                  Direct photo upload required. At least 1 photo compulsory.
                 </span>
               </div>
             ) : (
