@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Store,
   Compass,
@@ -20,6 +20,8 @@ import {
   Package,
   Settings,
   LogOut,
+  ArrowRight,
+  ShieldCheck,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Product } from '../../types';
@@ -71,6 +73,27 @@ export const Navbar: React.FC<NavbarProps> = ({
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   };
 
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileMenuOpen]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && mobileMenuOpen) {
+        setMobileMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobileMenuOpen]);
+
   interface NavItem {
     id: string;
     label: string;
@@ -104,6 +127,29 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   if (isAdminMode || currentUser.role === 'admin') {
     allNavItems.push({
+      id: 'admin',
+      label: 'Admin Moderation',
+      icon: Shield,
+      highlight: true,
+    });
+  }
+
+  // Floating Mobile Navigation List (Archive-style vertical clean items)
+  const mobileNavItems: NavItem[] = [
+    { id: 'home', label: 'Home', icon: Store },
+    { id: 'marketplace', label: 'Explore Catalogue', icon: Compass, badge: `${approvedCount}` },
+    { id: 'wanted', label: 'Wanted Board', icon: FileQuestion },
+    { id: 'chats', label: 'Student Chats', icon: MessageSquare, badge: unreadChats > 0 ? `${unreadChats}` : undefined },
+    { id: 'wishlist', label: 'Saved Wishlist', icon: Heart, badge: wishlist.length > 0 ? `${wishlist.length}` : undefined },
+    { id: 'terms', label: 'Terms & Rules', icon: ShieldCheck },
+  ];
+
+  if (isLoggedIn) {
+    mobileNavItems.splice(5, 0, { id: 'dashboard', label: 'My Account Settings', icon: User });
+  }
+
+  if (isAdminMode || currentUser.role === 'admin') {
+    mobileNavItems.push({
       id: 'admin',
       label: 'Admin Moderation',
       icon: Shield,
@@ -481,78 +527,167 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      {/* Mobile Menu Drawer */}
+      {/* Floating Blurred Mobile Menu Modal (Archive-style) */}
       {mobileMenuOpen && (
-        <div className="lg:hidden mt-2 bg-[#FFFBEA] rounded-2xl border-2 border-[#1C1C1C] shadow-[5px_5px_0px_#1C1C1C] p-4 animate-in slide-in-from-top-2 duration-150">
-          <div className="grid grid-cols-2 gap-2 mb-3">
-            {allNavItems.map((item) => {
-              const isActive = activeTab === item.id;
-              const Icon = item.icon;
-
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    if (item.id === 'sell') {
-                      if (!isLoggedIn) {
-                        onOpenAuth();
-                        setMobileMenuOpen(false);
-                        return;
-                      }
-                      if (onOpenSellModal) {
-                        onOpenSellModal();
-                        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-                        setMobileMenuOpen(false);
-                      }
-                    } else {
-                      navigateTo(item.id);
-                    }
-                  }}
-                  className={`p-2.5 rounded-xl border-1.5 border-[#1C1C1C] text-xs font-bold flex items-center gap-2 ${
-                    isActive
-                      ? item.isCta
-                        ? 'bg-[#FFE600] shadow-[2px_2px_0px_#1C1C1C]'
-                        : 'bg-[#F2A93B] shadow-[2px_2px_0px_#1C1C1C]'
-                      : item.isCta
-                      ? 'bg-[#FFE600] shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#FFD600]'
-                      : 'bg-white hover:bg-[#FFF9E6]'
-                  }`}
+        <div
+          className="lg:hidden fixed inset-0 z-50 bg-black/45 backdrop-blur-md flex flex-col justify-between py-6 px-4 overflow-y-auto animate-in fade-in duration-200"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setMobileMenuOpen(false);
+            }
+          }}
+        >
+          {/* Top Pill Header */}
+          <div className="w-full max-w-[340px] xs:max-w-[360px] mx-auto bg-white/95 backdrop-blur-sm border-2 border-[#1C1C1C] rounded-full px-4 py-2 flex items-center justify-between shadow-[3px_3px_0px_#1C1C1C] shrink-0">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-[#F2A93B] border border-[#1C1C1C] flex items-center justify-center shadow-[1px_1px_0px_#1C1C1C]">
+                <svg
+                  className="w-4 h-4 text-[#1C1C1C]"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 >
-                  <Icon className="w-4 h-4" />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
+                  <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7" />
+                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                  <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4" />
+                  <path d="M2 7h20" />
+                  <circle cx="12" cy="7" r="1.5" fill="#1C1C1C" />
+                </svg>
+              </div>
+              <span className="font-head text-sm font-extrabold tracking-tight text-[#1C1C1C]">
+                marketplace<span className="text-[#1C1C1C]">.</span>bmsit
+              </span>
+            </div>
+
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className="w-8 h-8 rounded-full bg-[#1C1C1C] text-[#FFFBEA] flex items-center justify-center hover:bg-[#F2A93B] hover:text-[#1C1C1C] transition cursor-pointer shadow-[1px_1px_0px_#1C1C1C]"
+              aria-label="Close navigation menu"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
 
-          <div className="pt-3 border-t border-[#1C1C1C]/20 flex items-center justify-between text-xs">
-            {currentUser.id !== 'guest' && currentUser.email ? (
-              <>
-                <span className="font-mono text-neutral-600 font-bold truncate max-w-[200px]">
-                  {currentUser.name} ({currentUser.usn})
-                </span>
-                <button
-                  onClick={() => {
-                    logoutUser();
-                    setMobileMenuOpen(false);
-                  }}
-                  className="text-[#E1467A] font-bold hover:underline shrink-0"
-                >
-                  Sign Out
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={() => {
+          {/* Floating Central Card */}
+          <div
+            className="w-full max-w-[340px] xs:max-w-[360px] mx-auto my-auto bg-white/95 backdrop-blur-sm rounded-3xl border-2.5 border-[#1C1C1C] shadow-[5px_5px_0px_#1C1C1C] p-3.5 space-y-2 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Clean Vertical Navigation List */}
+            <div className="space-y-1">
+              {mobileNavItems.map((item) => {
+                const isActive = activeTab === item.id;
+                const Icon = item.icon;
+
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      navigateTo(item.id);
+                    }}
+                    className={`w-full flex items-center gap-3 p-2.5 rounded-2xl transition font-bold text-xs sm:text-sm text-left cursor-pointer ${
+                      isActive
+                        ? 'bg-[#FFF3D6] text-[#1C1C1C] border-1.5 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C]'
+                        : 'text-[#1C1C1C]/85 hover:bg-[#FFF9E6] hover:text-[#1C1C1C] border border-transparent'
+                    }`}
+                  >
+                    <div
+                      className={`w-8 h-8 rounded-xl border border-[#1C1C1C]/30 flex items-center justify-center shrink-0 ${
+                        isActive
+                          ? 'bg-[#F2A93B] text-[#1C1C1C] shadow-[1px_1px_0px_#1C1C1C]'
+                          : 'bg-[#FFF9E6] text-[#1C1C1C]'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <span className="font-head font-extrabold flex-1 text-[#1C1C1C]">
+                      {item.label}
+                    </span>
+                    {item.badge && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-[#1C1C1C] bg-[#FFE082] text-[#1C1C1C]">
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Primary Action Button: Sell an Item */}
+            <button
+              onClick={() => {
+                if (!isLoggedIn) {
                   onOpenAuth();
                   setMobileMenuOpen(false);
-                }}
-                className="w-full py-2.5 bg-[#F2A93B] font-bold text-center rounded-xl border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C]"
-              >
-                Sign In / Register with @bmsit.in
-              </button>
-            )}
+                  return;
+                }
+                if (onOpenSellModal) {
+                  onOpenSellModal();
+                  window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                  setMobileMenuOpen(false);
+                }
+              }}
+              className="w-full py-3 px-4 rounded-2xl border-2 border-[#1C1C1C] bg-[#F2A93B] text-[#1C1C1C] font-head font-extrabold text-xs sm:text-sm shadow-[3px_3px_0px_#1C1C1C] hover:bg-[#e49b2f] active:translate-x-0.5 active:translate-y-0.5 transition flex items-center justify-between cursor-pointer mt-1"
+            >
+              <div className="flex items-center gap-2">
+                <PlusCircle className="w-4 h-4 text-[#1C1C1C]" />
+                <span>Sell an Item on Campus</span>
+              </div>
+              <ArrowRight className="w-4 h-4 text-[#1C1C1C]" />
+            </button>
+
+            {/* Account / Authentication Footer in Card */}
+            <div className="pt-2 mt-1 border-t border-[#1C1C1C]/15">
+              {isLoggedIn ? (
+                <div className="flex items-center justify-between px-1">
+                  <div
+                    onClick={() => navigateTo('dashboard')}
+                    className="flex items-center gap-2 cursor-pointer group"
+                  >
+                    <img
+                      src={currentUser.avatar}
+                      alt={currentUser.name}
+                      className="w-7 h-7 rounded-lg border border-[#1C1C1C] object-cover shrink-0"
+                    />
+                    <div className="text-left leading-tight">
+                      <div className="text-xs font-bold text-[#1C1C1C] truncate max-w-[170px] group-hover:underline">
+                        {currentUser.name}
+                      </div>
+                      <div className="text-[10px] font-mono text-neutral-500">
+                        {currentUser.usn}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      logoutUser();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="text-xs font-bold text-[#E1467A] hover:underline cursor-pointer py-1 px-2"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    onOpenAuth();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full py-2.5 px-3 rounded-xl border-2 border-[#1C1C1C] bg-[#1C1C1C] text-[#FFFBEA] font-head font-extrabold text-xs flex items-center justify-center gap-2 shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#333] transition cursor-pointer"
+                >
+                  <User className="w-3.5 h-3.5 text-[#F2A93B]" />
+                  <span>Sign In / Register with @bmsit.in</span>
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Bottom spacer for centering */}
+          <div className="h-2 shrink-0" />
         </div>
       )}
     </header>
