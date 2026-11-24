@@ -70,7 +70,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     setMobileMenuOpen(false);
     setNotifDropdownOpen(false);
     setUserMenuOpen(false);
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   };
 
   useEffect(() => {
@@ -212,7 +212,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     }
                     if (onOpenSellModal) {
                       onOpenSellModal();
-                      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
                     }
                   } else {
                     navigateTo(item.id);
@@ -625,7 +625,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }
                 if (onOpenSellModal) {
                   onOpenSellModal();
-                  window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                  window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
                   setMobileMenuOpen(false);
                 }
               }}

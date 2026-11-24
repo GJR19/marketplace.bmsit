@@ -508,7 +508,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         status: 'active',
         avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=bmsit_admin_master',
       };
-      sessionStorage.setItem('bmsit_admin_auth', 'true');
+      try { sessionStorage.setItem('bmsit_admin_auth', 'true'); } catch {}
       setCurrentUser(adminStudent);
       pushToast('Admin authentication successful! Welcome Administrator.', 'success');
       onClose();

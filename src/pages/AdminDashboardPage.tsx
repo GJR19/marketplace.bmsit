@@ -82,7 +82,11 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
   // Server-authenticated Admin Session
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
-    return sessionStorage.getItem('bmsit_admin_auth') === 'true';
+    try {
+      return sessionStorage.getItem('bmsit_admin_auth') === 'true';
+    } catch {
+      return false;
+    }
   });
   const [adminUsername, setAdminUsername] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
@@ -102,7 +106,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       trimmedUser.toLowerCase() === 'tomhollandkingsteeve11' &&
       adminPassword === 'JackyPacky@14'
     ) {
-      sessionStorage.setItem('bmsit_admin_auth', 'true');
+      try { sessionStorage.setItem('bmsit_admin_auth', 'true'); } catch {}
       setIsAdminAuthenticated(true);
       pushToast('Admin authentication successful! Welcome to Moderation Portal.', 'success');
       return;
@@ -122,7 +126,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       }
 
       if (data && data.success) {
-        sessionStorage.setItem('bmsit_admin_auth', 'true');
+        try { sessionStorage.setItem('bmsit_admin_auth', 'true'); } catch {}
         setIsAdminAuthenticated(true);
         pushToast('Admin authentication successful! Welcome to Moderation Portal.', 'success');
       } else {
@@ -136,7 +140,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   };
 
   const handleAdminLogout = () => {
-    sessionStorage.removeItem('bmsit_admin_auth');
+    try { sessionStorage.removeItem('bmsit_admin_auth'); } catch {}
     setIsAdminAuthenticated(false);
     pushToast('Admin logged out successfully.', 'info');
   };

@@ -137,6 +137,32 @@ const STORAGE_KEYS = {
   LAST_ACTIVITY: 'marketplace_bmsit_last_activity_v4',
 };
 
+export const safeLocalStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      return typeof window !== 'undefined' ? localStorage.getItem(key) : null;
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(key, value);
+      }
+    } catch (e) {
+      console.warn('safeLocalStorage setItem error:', e);
+    }
+  },
+  removeItem: (key: string): void => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(key);
+      }
+    } catch {}
+  },
+};
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -145,7 +171,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [students, setStudents] = useState<Student[]>([]);
 
   const [currentUser, setCurrentUserState] = useState<Student>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+    const saved = safeLocalStorage.getItem(STORAGE_KEYS.CURRENT_USER);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -160,8 +186,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isAdminMode, setIsAdminMode] = useState<boolean>(currentUser.role === 'admin');
 
   const [wishlist, setWishlist] = useState<string[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.WISHLIST);
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = safeLocalStorage.getItem(STORAGE_KEYS.WISHLIST);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
   });
 
   const [compareList, setCompareList] = useState<string[]>([]);
@@ -188,43 +218,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Sync state to LocalStorage
+  // Sync state to LocalStorage safely
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
-  }, [products]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
-  }, [students]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(currentUser));
+    safeLocalStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(currentUser));
     setIsAdminMode(currentUser.role === 'admin');
   }, [currentUser]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.WISHLIST, JSON.stringify(wishlist));
+    safeLocalStorage.setItem(STORAGE_KEYS.WISHLIST, JSON.stringify(wishlist));
   }, [wishlist]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.WANTED, JSON.stringify(wantedRequests));
-  }, [wantedRequests]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.CHATS, JSON.stringify(allChats));
-  }, [allChats]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
-  }, [notifications]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.REPORTS, JSON.stringify(reports));
-  }, [reports]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(adminLogs));
-  }, [adminLogs]);
 
   // Toast Helpers
   const pushToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'success') => {
@@ -1735,9 +1737,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const logoutUser = async (customMessage?: string | unknown) => {
-    await supabase.auth.signOut();
-    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
-    localStorage.removeItem(STORAGE_KEYS.LAST_ACTIVITY);
+    try { await supabase.auth.signOut(); } catch {}
+    safeLocalStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+    safeLocalStorage.removeItem(STORAGE_KEYS.LAST_ACTIVITY);
+    try { sessionStorage.removeItem('bmsit_admin_auth'); } catch {}
     setCurrentUserState(GUEST_STUDENT);
     setIsAdminMode(false);
     const msg = typeof customMessage === 'string' ? customMessage : 'Signed out of BMSIT Marketplace.';
@@ -1752,18 +1755,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // Set initial activity timestamp if none exists
-    if (!localStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY)) {
-      localStorage.setItem(STORAGE_KEYS.LAST_ACTIVITY, Date.now().toString());
+    if (!safeLocalStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY)) {
+      safeLocalStorage.setItem(STORAGE_KEYS.LAST_ACTIVITY, Date.now().toString());
     }
 
     const checkInactivity = async () => {
-      const lastActiveStr = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY);
+      const lastActiveStr = safeLocalStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY);
       if (!lastActiveStr) return;
       const lastActive = parseInt(lastActiveStr, 10);
       const elapsed = Date.now() - lastActive;
 
       if (elapsed >= INACTIVITY_TIMEOUT_MS) {
-        localStorage.removeItem(STORAGE_KEYS.LAST_ACTIVITY);
+        safeLocalStorage.removeItem(STORAGE_KEYS.LAST_ACTIVITY);
         await logoutUser('You have been logged out due to 30 minutes of inactivity.');
       }
     };
@@ -1774,7 +1777,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Throttle updates to localStorage to once every 10 seconds
       if (now - lastRecorded > 10000) {
         lastRecorded = now;
-        localStorage.setItem(STORAGE_KEYS.LAST_ACTIVITY, now.toString());
+        safeLocalStorage.setItem(STORAGE_KEYS.LAST_ACTIVITY, now.toString());
       }
     };
 
@@ -1825,7 +1828,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Reset / Clear Local Data
   const resetDemoData = () => {
-    Object.values(STORAGE_KEYS).forEach((k) => localStorage.removeItem(k));
+    Object.values(STORAGE_KEYS).forEach((k) => safeLocalStorage.removeItem(k));
     setProducts([]);
     setStudents([]);
     setCurrentUserState(GUEST_STUDENT);

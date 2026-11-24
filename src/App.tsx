@@ -31,7 +31,7 @@ const MainApp: React.FC = () => {
 
   // Always open every page from the starting top
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [activeTab]);
 
   // Direct access to secret admin route /ishowspeed
