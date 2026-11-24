@@ -6,6 +6,7 @@ import {
   RotateCcw,
   PlusCircle,
   X,
+  Sparkles,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Product, ProductCategory } from '../types';
@@ -202,6 +203,34 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({
               <option value="oldest">Oldest Listings</option>
             </select>
           </div>
+        </div>
+      </div>
+
+      {/* Mobile Category Pill Filter (Requested Design) */}
+      <div className="lg:hidden p-4 bg-[#FFFBEA] rounded-3xl border-2.5 border-[#1C1C1C] shadow-[4px_4px_0px_#1C1C1C] space-y-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-[#E1467A]" />
+          <span className="font-head font-bold text-sm text-[#1C1C1C]">Category:</span>
+        </div>
+        <div className="flex flex-wrap gap-2 items-center">
+          {categories.map((cat) => {
+            const isSelected = selectedCategory === cat;
+            const label = cat === 'All' ? 'All Categories' : cat;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-4 py-1.5 rounded-full border-2 border-[#1C1C1C] text-xs font-bold transition cursor-pointer ${
+                  isSelected
+                    ? 'bg-[#F2A93B] shadow-[2.5px_2.5px_0px_#1C1C1C] text-[#1C1C1C]'
+                    : 'bg-white shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#FFF9E6] text-[#1C1C1C]'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
       </div>
 

@@ -17,9 +17,9 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { to, subject, html } = req.body || {};
-  if (!to || !subject || !html) {
-    return res.status(400).json({ error: 'Missing required fields: to, subject, html' });
+  const { to, subject, html, bcc } = req.body || {};
+  if ((!to && !bcc) || !subject || !html) {
+    return res.status(400).json({ error: 'Missing required fields: to/bcc, subject, html' });
   }
 
   const apiKey = process.env.RESEND_API_KEY;
@@ -31,18 +31,23 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
+    const payload: any = {
+      from: 'BMSIT Marketplace <noreply@marketplace.bmsit.co.in>',
+      to: to ? (Array.isArray(to) ? to : [to]) : ['noreply@marketplace.bmsit.co.in'],
+      subject,
+      html,
+    };
+    if (bcc) {
+      payload.bcc = Array.isArray(bcc) ? bcc : [bcc];
+    }
+
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        from: 'BMSIT Marketplace <noreply@marketplace.bmsit.co.in>',
-        to: Array.isArray(to) ? to : [to],
-        subject,
-        html,
-      }),
+      body: JSON.stringify(payload),
     });
 
     const data = await response.json();

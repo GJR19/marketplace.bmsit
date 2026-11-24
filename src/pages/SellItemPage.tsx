@@ -152,7 +152,9 @@ export const SellItemPage: React.FC<SellItemPageProps> = ({
 
       setSubmittedProduct(created);
       setIsSubmittedSuccess(true);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      try {
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      } catch {}
     } catch (err: any) {
       pushToast(err?.message || 'Error submitting listing. Please try again.', 'error');
     } finally {

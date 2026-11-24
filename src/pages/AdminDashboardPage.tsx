@@ -47,14 +47,15 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     deleteProduct,
     suspendUser,
     unsuspendUser,
-    updateReportStatus,
+    approveWantedRequest,
+    rejectWantedRequest,
     resetDemoData,
     currentUser,
     pushToast,
   } = useApp();
 
   const [activeAdminTab, setActiveAdminTab] = useState<
-    'queue' | 'wanted' | 'users' | 'reports' | 'logs' | 'locations'
+    'queue' | 'wanted' | 'users' | 'logs' | 'locations'
   >('queue');
 
   // Listing queue filter
@@ -79,6 +80,10 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
   // Inspection preview modal
   const [inspectProduct, setInspectProduct] = useState<Product | null>(null);
+  const [activeInspectImgIdx, setActiveInspectImgIdx] = useState<number>(0);
+
+  // Wanted filter
+  const [wantedFilter, setWantedFilter] = useState<'pending_approval' | 'approved' | 'all'>('pending_approval');
 
   // Server-authenticated Admin Session
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
@@ -172,7 +177,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
           sellerBranch: row.seller_branch || 'Engineering',
           sellerAdmissionYear: 2024,
           sellerCurrentYear: 'Student',
-          sellerAvatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${row.seller_usn || row.seller_id}`,
+          sellerAvatar: row.seller_avatar || row.avatar_url || (row.seller && row.seller.avatar_url) || `https://api.dicebear.com/7.x/bottts/svg?seed=${row.seller_usn || row.seller_id}`,
           status: row.status === 'pending' ? 'pending_approval' : (row.status as ListingStatus),
           handoverLocation: row.location || 'Campus Main Gate',
           contactPreference: row.meet_preferences || 'In-app Chat',
@@ -203,7 +208,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
           studentUSN: row.student_usn || '1BY24XX000',
           studentBranch: row.student_branch || 'Engineering',
           studentAdmissionYear: Number(row.student_admission_year) || 2024,
-          status: 'open' as const,
+          status: (row.status === 'pending' || row.status === 'pending_approval') ? 'pending_approval' : (row.status || 'open'),
           responses: [],
           postedDate: row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
         }));
@@ -234,7 +239,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
         branch: u.branch || 'Engineering',
         admissionYear: Number(u.admission_year) || 2024,
         currentYear: u.current_year || 'Student',
-        avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${u.usn || u.id}`,
+        avatar: u.avatar_url || u.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${u.usn || u.id}`,
         role: 'student' as const,
         verified: Boolean(u.is_verified),
         status: (u.is_suspended ? 'suspended' : 'active') as 'suspended' | 'active',
@@ -254,7 +259,9 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   const rejectedCount = currentProducts.filter((p) => p.status === 'rejected').length;
   const soldCount = currentProducts.filter((p) => p.status === 'sold').length;
   const suspendedCount = currentStudents.filter((s) => s.status === 'suspended').length;
-  const openReportsCount = reports.filter((r) => r.status === 'open' || r.status === 'investigating').length;
+  const pendingWantedCount = currentWantedRequests.filter(
+    (r) => r.status === 'pending_approval' || (r as any).status === 'pending'
+  ).length;
 
   // Filtered Listings Queue
   const filteredQueue = currentProducts.filter((p) => {
@@ -468,9 +475,9 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
         </div>
 
         <div className="p-3.5 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[2.5px_2.5px_0px_#1C1C1C]">
-          <span className="text-[10px] uppercase font-bold text-neutral-500 block">Open Reports</span>
-          <div className="font-head font-extrabold text-2xl text-purple-700 mt-1">{openReportsCount}</div>
-          <span className="text-[10px] text-neutral-600">Flagged listings</span>
+          <span className="text-[10px] uppercase font-bold text-neutral-500 block">Wanted Reviews</span>
+          <div className="font-head font-extrabold text-2xl text-[#2563EB] mt-1">{pendingWantedCount}</div>
+          <span className="text-[10px] text-neutral-600">Pending approval</span>
         </div>
 
         <div className="p-3.5 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[2.5px_2.5px_0px_#1C1C1C]">
@@ -484,9 +491,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       <div className="flex flex-wrap items-center gap-2 p-1.5 bg-[#FFFBEA] rounded-2xl border-2 border-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C]">
         {[
           { id: 'queue', label: 'Listing Approval Queue', icon: Package, badge: pendingCount > 0 ? `${pendingCount}` : undefined },
-          { id: 'wanted', label: 'Wanted Board', icon: Tag, badge: `${currentWantedRequests.length}` },
+          { id: 'wanted', label: 'Wanted Board', icon: Tag, badge: pendingWantedCount > 0 ? `${pendingWantedCount} pending` : undefined },
           { id: 'users', label: 'Student Accounts', icon: User, badge: `${currentStudents.length}` },
-          { id: 'reports', label: 'Moderation Reports', icon: Flag, badge: openReportsCount > 0 ? `${openReportsCount}` : undefined },
           { id: 'logs', label: 'Audit Activity Log', icon: FileText },
           { id: 'locations', label: 'Exchange Spots', icon: MapPin },
         ].map((tab) => {
@@ -678,76 +684,167 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       {/* ─── TAB: WANTED BOARD REQUESTS ─── */}
       {activeAdminTab === 'wanted' && (
         <div className="space-y-4">
-          <div className="p-4 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] flex items-center justify-between">
+          <div className="p-4 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="font-head font-bold text-base text-[#1C1C1C]">
                 Campus Wanted Board Requests ({currentWantedRequests.length})
               </h3>
               <p className="text-xs text-neutral-600">
-                Items BMSIT students are actively looking to buy or borrow on campus.
+                Review and approve item requests before they go live on the campus board.
               </p>
             </div>
-            <button
-              onClick={fetchAdminData}
-              className="px-3 py-1.5 text-xs font-bold rounded-lg border border-[#1C1C1C] bg-[#FFF9E6] hover:bg-[#FFE082] transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <RotateCw className="w-3.5 h-3.5" />
-              <span>Refresh</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="flex rounded-xl border border-[#1C1C1C] overflow-hidden text-xs">
+                {(['pending_approval', 'approved', 'all'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setWantedFilter(mode)}
+                    className={`px-3 py-1.5 font-bold transition cursor-pointer ${
+                      wantedFilter === mode
+                        ? 'bg-[#F2A93B] text-[#1C1C1C]'
+                        : 'bg-white text-neutral-600 hover:bg-[#FFF9E6]'
+                    }`}
+                  >
+                    {mode === 'pending_approval'
+                      ? `Pending (${currentWantedRequests.filter((r) => r.status === 'pending_approval' || (r as any).status === 'pending').length})`
+                      : mode === 'approved'
+                      ? 'Approved'
+                      : 'All'}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={fetchAdminData}
+                className="px-3 py-1.5 text-xs font-bold rounded-lg border border-[#1C1C1C] bg-[#FFF9E6] hover:bg-[#FFE082] transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+                <span>Refresh</span>
+              </button>
+            </div>
           </div>
 
-          {currentWantedRequests.length > 0 ? (
+          {currentWantedRequests.filter((r) => {
+            if (wantedFilter === 'pending_approval') {
+              return r.status === 'pending_approval' || (r as any).status === 'pending';
+            }
+            if (wantedFilter === 'approved') {
+              return r.status === 'open' || r.status === 'approved' || r.status === 'responses_received';
+            }
+            return true;
+          }).length > 0 ? (
             <div className="space-y-3">
-              {currentWantedRequests.map((req) => (
-                <div
-                  key={req.id}
-                  className="p-5 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] flex flex-col md:flex-row md:items-center justify-between gap-4"
-                >
-                  <div className="space-y-1.5 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded border border-[#1C1C1C] bg-[#FFE082] text-[#1C1C1C]">
-                        WANTED ITEM
-                      </span>
-                      <span className="text-[11px] font-bold text-[#E1467A]">
-                        {req.category}
-                      </span>
-                      <span className="text-[10px] text-neutral-500 font-mono">
-                        {req.postedDate}
-                      </span>
-                    </div>
+              {currentWantedRequests
+                .filter((r) => {
+                  if (wantedFilter === 'pending_approval') {
+                    return r.status === 'pending_approval' || (r as any).status === 'pending';
+                  }
+                  if (wantedFilter === 'approved') {
+                    return r.status === 'open' || r.status === 'approved' || r.status === 'responses_received';
+                  }
+                  return true;
+                })
+                .map((req) => {
+                  const isPending = req.status === 'pending_approval' || (req as any).status === 'pending';
+                  const isApproved = req.status === 'open' || req.status === 'approved' || req.status === 'responses_received';
+                  const isRejected = req.status === 'rejected';
 
-                    <h4 className="font-head font-bold text-base text-[#1C1C1C]">
-                      {req.title}
-                    </h4>
-
-                    {req.description && (
-                      <p className="text-xs text-neutral-700 bg-[#FFFBEA] p-2.5 rounded-xl border border-[#1C1C1C]/15 max-w-2xl">
-                        "{req.description}"
-                      </p>
-                    )}
-
-                    <div className="text-[11px] text-neutral-600 font-mono">
-                      Requested by: <strong className="text-[#1C1C1C]">{req.studentName}</strong> (
-                      <strong>{req.studentUSN}</strong>) • {req.studentBranch}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
-                    <button
-                      onClick={() => handleDeleteWanted(req.id)}
-                      className="px-3 py-1.5 text-xs font-bold rounded-lg border border-[#1C1C1C] text-[#E1467A] hover:bg-[#FDF2F4] transition flex items-center gap-1 cursor-pointer"
-                      title="Remove wanted request"
+                  return (
+                    <div
+                      key={req.id}
+                      className="p-5 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] flex flex-col md:flex-row md:items-center justify-between gap-4"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Remove</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
+                      <div className="space-y-1.5 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded border border-[#1C1C1C] bg-[#FFE082] text-[#1C1C1C]">
+                            WANTED ITEM
+                          </span>
+                          <span className="text-[11px] font-bold text-[#E1467A]">
+                            {req.category}
+                          </span>
+                          {isPending && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded border border-[#1C1C1C] bg-[#F2A93B] text-[#1C1C1C]">
+                              ⏳ PENDING APPROVAL
+                            </span>
+                          )}
+                          {isApproved && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-800 bg-emerald-100 text-emerald-900">
+                              ✓ LIVE ON BOARD
+                            </span>
+                          )}
+                          {isRejected && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded border border-rose-800 bg-rose-100 text-rose-900">
+                              DECLINED
+                            </span>
+                          )}
+                          <span className="text-[10px] text-neutral-500 font-mono">
+                            {req.postedDate}
+                          </span>
+                        </div>
+
+                        <h4 className="font-head font-bold text-base text-[#1C1C1C]">
+                          {req.title}
+                        </h4>
+
+                        {req.description && (
+                          <p className="text-xs text-neutral-700 bg-[#FFFBEA] p-2.5 rounded-xl border border-[#1C1C1C]/15 max-w-2xl">
+                            "{req.description}"
+                          </p>
+                        )}
+
+                        <div className="text-[11px] text-neutral-600 font-mono">
+                          Requested by: <strong className="text-[#1C1C1C]">{req.studentName}</strong> (
+                          <strong>{req.studentUSN}</strong>) • {req.studentBranch}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 self-end md:self-center flex-wrap">
+                        {isPending && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                approveWantedRequest(req.id);
+                                setDbWantedRequests((prev) =>
+                                  prev.map((r) => (r.id === req.id ? { ...r, status: 'open' } : r))
+                                );
+                              }}
+                              className="px-3.5 py-1.5 text-xs font-bold rounded-lg border-2 border-[#1C1C1C] bg-[#F2A93B] hover:bg-[#e49b2f] text-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] transition cursor-pointer flex items-center gap-1.5"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Approve & Broadcast</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                rejectWantedRequest(req.id, 'Does not comply with BMSIT guidelines');
+                                setDbWantedRequests((prev) =>
+                                  prev.map((r) => (r.id === req.id ? { ...r, status: 'rejected' } : r))
+                                );
+                              }}
+                              className="px-3 py-1.5 text-xs font-bold rounded-lg border border-[#1C1C1C] bg-white text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+
+                        <button
+                          onClick={() => handleDeleteWanted(req.id)}
+                          className="px-3 py-1.5 text-xs font-bold rounded-lg border border-[#1C1C1C] text-[#E1467A] hover:bg-[#FDF2F4] transition flex items-center gap-1 cursor-pointer"
+                          title="Remove wanted request"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
           ) : (
             <div className="p-8 bg-white rounded-2xl border-2 border-dashed border-[#1C1C1C] text-center text-xs text-neutral-500">
-              No active wanted requests posted yet.
+              No wanted requests in this view.
             </div>
           )}
         </div>
@@ -842,77 +939,6 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ─── TAB 3: MODERATION REPORTS ─── */}
-      {activeAdminTab === 'reports' && (
-        <div className="space-y-4">
-          <div className="p-4 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] flex items-center justify-between">
-            <h3 className="font-head font-bold text-base text-[#1C1C1C]">
-              Flagged Items & User Reports ({reports.length})
-            </h3>
-          </div>
-
-          <div className="space-y-3">
-            {reports.map((r) => (
-              <div
-                key={r.id}
-                className="p-4 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="nb-sticker rose text-[10px] py-0 px-1.5">
-                      {r.targetType.toUpperCase()}: {r.targetTitle}
-                    </span>
-                    <span className="font-mono text-neutral-500">{r.timestamp}</span>
-                  </div>
-
-                  <h4 className="font-head font-bold text-sm text-[#1C1C1C]">
-                    Reason: {r.reason}
-                  </h4>
-                  <p className="text-neutral-700 bg-[#FFFBEA] p-2.5 rounded-lg border border-[#1C1C1C]/15">
-                    "{r.details}"
-                  </p>
-                  <div className="text-[11px] text-neutral-500">
-                    Reported by: <span className="font-semibold text-[#1C1C1C]">{r.reporterName}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 self-end md:self-center shrink-0">
-                  <span
-                    className={`px-2 py-1 rounded text-[10px] font-bold border ${
-                      r.status === 'resolved'
-                        ? 'bg-emerald-100 text-emerald-900 border-emerald-800'
-                        : r.status === 'dismissed'
-                        ? 'bg-neutral-100 text-neutral-700 border-neutral-400'
-                        : 'bg-[#FFE082] text-[#1C1C1C] border-[#1C1C1C]'
-                    }`}
-                  >
-                    {r.status.toUpperCase()}
-                  </span>
-
-                  {r.status !== 'resolved' && (
-                    <button
-                      onClick={() => updateReportStatus(r.id, 'resolved')}
-                      className="px-3 py-1.5 rounded-lg border border-[#1C1C1C] bg-[#F2A93B] font-bold hover:bg-[#e49b2f]"
-                    >
-                      Resolve
-                    </button>
-                  )}
-
-                  {r.status !== 'dismissed' && (
-                    <button
-                      onClick={() => updateReportStatus(r.id, 'dismissed')}
-                      className="px-3 py-1.5 rounded-lg border border-[#1C1C1C] bg-white font-semibold hover:bg-neutral-100"
-                    >
-                      Dismiss
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       )}
@@ -1079,22 +1105,67 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
       {/* INSPECT PRODUCT POPUP */}
       {inspectProduct && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/55 backdrop-blur-xs">
-          <div className="w-full max-w-lg bg-[#FFFBF5] rounded-3xl border-3 border-[#1C1C1C] shadow-[7px_7px_0px_#1C1C1C] p-6 space-y-4 animate-in zoom-in-95">
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="w-full max-w-lg bg-[#FFFBF5] rounded-3xl border-3 border-[#1C1C1C] shadow-[7px_7px_0px_#1C1C1C] p-6 space-y-4 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-2 border-b border-[#1C1C1C]/15">
-              <h3 className="font-head font-bold text-base text-[#1C1C1C]">
-                Moderator Inspection
-              </h3>
-              <button onClick={() => setInspectProduct(null)}>
-                <XCircle className="w-5 h-5 text-neutral-500" />
+              <div className="flex items-center gap-2">
+                <h3 className="font-head font-bold text-base text-[#1C1C1C]">
+                  Moderator Inspection
+                </h3>
+                {inspectProduct.images.length > 0 && (
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#FFE082] border border-[#1C1C1C]">
+                    {inspectProduct.images.length} {inspectProduct.images.length === 1 ? 'photo' : 'photos'}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setInspectProduct(null);
+                  setActiveInspectImgIdx(0);
+                }}
+                className="cursor-pointer"
+              >
+                <XCircle className="w-5 h-5 text-neutral-500 hover:text-[#1C1C1C]" />
               </button>
             </div>
 
-            <img
-              src={inspectProduct.images[0]}
-              alt={inspectProduct.title}
-              className="w-full h-48 object-cover rounded-xl border-2 border-[#1C1C1C]"
-            />
+            {/* Main Preview Image */}
+            <div className="relative">
+              <img
+                src={inspectProduct.images[activeInspectImgIdx] || inspectProduct.images[0]}
+                alt={inspectProduct.title}
+                className="w-full h-56 object-cover rounded-xl border-2 border-[#1C1C1C]"
+              />
+              {inspectProduct.images.length > 1 && (
+                <span className="absolute bottom-2 right-2 px-2.5 py-1 text-[11px] font-mono bg-black/75 text-white rounded-md font-bold">
+                  {activeInspectImgIdx + 1} of {inspectProduct.images.length}
+                </span>
+              )}
+            </div>
+
+            {/* Thumbnails of All Images */}
+            {inspectProduct.images.length > 1 && (
+              <div className="flex items-center gap-2 overflow-x-auto py-1">
+                {inspectProduct.images.map((img, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setActiveInspectImgIdx(idx)}
+                    className={`relative w-16 h-16 rounded-xl overflow-hidden border-2 transition shrink-0 cursor-pointer ${
+                      activeInspectImgIdx === idx
+                        ? 'border-[#F2A93B] ring-2 ring-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] scale-105'
+                        : 'border-[#1C1C1C]/30 opacity-70 hover:opacity-100'
+                    }`}
+                  >
+                    <img src={img} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                    <span className="absolute bottom-0.5 right-0.5 px-1 text-[9px] bg-black/70 text-white rounded font-mono">
+                      {idx + 1}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="space-y-1 text-xs">
               <div className="font-head font-bold text-base text-[#1C1C1C]">
@@ -1104,21 +1175,26 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                 {formatPriceINR(inspectProduct.price)} • {inspectProduct.category}
               </div>
               {inspectProduct.description && (
-                <p className="text-neutral-700 bg-[#FFFBEA] p-2 rounded-lg border border-[#1C1C1C]/15">
+                <p className="text-neutral-700 bg-[#FFFBEA] p-2.5 rounded-lg border border-[#1C1C1C]/15 whitespace-pre-line">
                   "{inspectProduct.description}"
                 </p>
               )}
-              <div className="text-[11px] font-mono text-neutral-500">
-                Seller: {inspectProduct.sellerName} • USN: {inspectProduct.sellerUSN}
+              <div className="text-[11px] font-mono text-neutral-500 pt-1">
+                Seller: <strong className="text-[#1C1C1C]">{inspectProduct.sellerName}</strong> • USN:{' '}
+                <strong className="text-[#1C1C1C]">{inspectProduct.sellerUSN}</strong>
               </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
-                onClick={() => setInspectProduct(null)}
-                className="px-4 py-1.5 text-xs font-bold rounded-lg border border-[#1C1C1C] bg-[#F2A93B]"
+                type="button"
+                onClick={() => {
+                  setInspectProduct(null);
+                  setActiveInspectImgIdx(0);
+                }}
+                className="px-4 py-2 text-xs font-bold rounded-lg border-2 border-[#1C1C1C] bg-[#F2A93B] hover:bg-[#e49b2f] text-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] cursor-pointer"
               >
-                Done
+                Close Preview
               </button>
             </div>
           </div>

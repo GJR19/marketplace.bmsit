@@ -89,6 +89,8 @@ interface AppContextType {
   deleteWantedRequest: (id: string) => void;
   closeWantedRequest: (id: string, status?: 'fulfilled' | 'expired') => void;
   addWantedResponse: (requestId: string, message: string, proposedPrice: number, offeredProductId?: string) => void;
+  approveWantedRequest: (id: string) => void;
+  rejectWantedRequest: (id: string, reason?: string) => void;
 
   // Chats
   sendMessage: (conversationId: string, text: string, isOffer?: boolean, offerAmount?: number) => void;
@@ -427,7 +429,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           studentUSN: row.requester?.usn || '1BY24XX000',
           studentBranch: row.requester?.branch || 'Engineering',
           studentAdmissionYear: Number(row.requester?.admission_year) || 2024,
-          status: 'open' as const,
+          status: (row.status === 'pending' || row.status === 'pending_approval') ? 'pending_approval' : (row.status || 'open'),
           responses: [],
           postedDate: row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
         }));
@@ -874,6 +876,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pushToast('Listing restored to Available on marketplace!', 'success');
   };
 
+  const broadcastEmailToAllUsers = async (subject: string, html: string) => {
+    try {
+      // 1. Fetch real student emails from Supabase profiles
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('college_email')
+        .not('college_email', 'is', null);
+
+      const dbEmails = (profiles || [])
+        .map((p: any) => p.college_email)
+        .filter(Boolean);
+
+      // 2. Combine with in-memory students
+      const localEmails = students.map((s) => s.email).filter(Boolean);
+
+      // 3. Always include admin gjr19atwork@gmail.com
+      const allUniqueEmails = Array.from(
+        new Set([...dbEmails, ...localEmails, 'gjr19atwork@gmail.com'])
+      ).filter((email) => email && email.includes('@'));
+
+      if (allUniqueEmails.length === 0) return;
+
+      await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: 'alerts@marketplace.bmsit.co.in',
+          bcc: allUniqueEmails,
+          subject,
+          html,
+        }),
+      });
+    } catch (err) {
+      console.warn('broadcastEmailToAllUsers error:', err);
+    }
+  };
+
   const approveProduct = (id: string) => {
     const target = products.find((p) => p.id === id);
     if (!target) return;
@@ -915,6 +954,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }).catch(() => {});
       }
     }
+
+    // Broadcast email to ALL marketplace users
+    broadcastEmailToAllUsers(
+      `🔥 New Campus Listing: ${target.title} (₹${target.price})`,
+      `
+        <div style="font-family:sans-serif;padding:24px;border:3px solid #1C1C1C;border-radius:12px;background:#FFFBEA;max-width:600px;margin:0 auto;">
+          <div style="background:#F2A93B;padding:12px 18px;border:2px solid #1C1C1C;border-radius:8px;margin-bottom:16px;">
+            <h2 style="color:#1C1C1C;margin:0;font-size:20px;">🔥 New Item Listed on Campus!</h2>
+          </div>
+          <p style="font-size:15px;color:#1C1C1C;margin-bottom:8px;">A new item just went live on the BMSIT student marketplace:</p>
+          <div style="background:#ffffff;border:2px solid #1C1C1C;border-radius:10px;padding:16px;margin:16px 0;">
+            <h3 style="margin:0 0 8px 0;font-size:18px;color:#1C1C1C;">${target.title}</h3>
+            <p style="margin:4px 0;font-size:16px;font-weight:bold;color:#1C1C1C;">Asking Price: ₹${target.price}</p>
+            <p style="margin:4px 0;font-size:14px;color:#555;">Category: <strong>${target.category}</strong></p>
+            <p style="margin:4px 0;font-size:14px;color:#555;">Seller: <strong>${target.sellerName}</strong> (${target.sellerUSN})</p>
+            <p style="margin:4px 0;font-size:14px;color:#555;">Campus Pickup: <strong>${target.handoverLocation}</strong></p>
+          </div>
+          <p style="margin-top:20px;">
+            <a href="https://marketplace.bmsit.co.in/?product=${target.id}" style="display:inline-block;padding:12px 24px;background:#F2A93B;color:#1C1C1C;font-weight:bold;text-decoration:none;border:2px solid #1C1C1C;border-radius:8px;box-shadow:3px 3px 0px #1C1C1C;">
+              View Listing on Marketplace &rarr;
+            </a>
+          </p>
+          <p style="font-size:11px;color:#888;margin-top:24px;border-top:1px solid #ddd;padding-top:12px;">
+            You are receiving this because you are a registered student on BMSIT Marketplace (marketplace.bmsit.co.in).
+          </p>
+        </div>
+      `
+    );
 
     // Notify seller locally
     const notif: NotificationItem = {
@@ -1065,14 +1132,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newReq: WantedRequest = {
       ...requestData,
       id: reqId,
-      status: 'open',
+      status: 'pending_approval',
       postedDate: new Date().toISOString().split('T')[0],
       responses: [],
     };
 
     setWantedRequests((prev) => [newReq, ...prev]);
 
-    // Insert into Supabase (triggers trg_notify_admin_new_wanted_request)
+    // Insert into Supabase with pending status
     if (currentUser?.id) {
       supabase
         .from('wanted_requests')
@@ -1083,7 +1150,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           category: newReq.category,
           max_budget: newReq.maxBudget || null,
           requester_id: currentUser.id,
-          status: 'approved',
+          status: 'pending',
         })
         .then(({ error }) => {
           if (error) console.warn('Supabase wanted request insert error:', error.message);
@@ -1096,10 +1163,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         to: 'gjr19atwork@gmail.com',
-        subject: `📌 New Wanted Request: ${newReq.title}`,
+        subject: `📌 [Review Required] New Wanted Request: ${newReq.title}`,
         html: `
           <div style="font-family:sans-serif;padding:24px;border:3px solid #1C1C1C;border-radius:12px;background:#FFFBEA;">
-            <h2 style="color:#1C1C1C;margin:0 0 12px 0;">New Wanted Request Posted</h2>
+            <h2 style="color:#1C1C1C;margin:0 0 12px 0;">New Wanted Request Pending Approval</h2>
             <p><strong>Item Needed:</strong> ${newReq.title}</p>
             <p><strong>Category:</strong> ${newReq.category}</p>
             <p><strong>Details:</strong> ${newReq.description}</p>
@@ -1107,7 +1174,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             <p><strong>Email:</strong> ${currentUser.email}</p>
             <p style="margin-top:20px;">
               <a href="https://marketplace.bmsit.co.in/ishowspeed" style="display:inline-block;padding:10px 18px;background:#F2A93B;color:#1C1C1C;font-weight:bold;text-decoration:none;border:2px solid #1C1C1C;border-radius:6px;">
-                View in Admin Portal &rarr;
+                Review in Admin Portal &rarr;
               </a>
             </p>
           </div>
@@ -1119,8 +1186,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const notif: NotificationItem = {
       id: 'notif-' + Date.now(),
       userId: currentUser.id,
-      title: 'Wanted Request Live! 📌',
-      message: `"${newReq.title}" posted. Campus sellers will be alerted.`,
+      title: 'Wanted Request Submitted for Approval ⏳',
+      message: `"${newReq.title}" has been submitted. It will appear on the Wanted Board once approved by moderators.`,
       type: 'wanted',
       read: false,
       timestamp: 'Just now',
@@ -1128,8 +1195,129 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setNotifications((prev) => [notif, ...prev]);
 
-    pushToast('Wanted request posted successfully!', 'success');
+    pushToast('Wanted request submitted! It will appear once approved by a moderator.', 'success');
     return newReq;
+  };
+
+  const approveWantedRequest = (id: string) => {
+    const target = wantedRequests.find((r) => r.id === id);
+    if (!target) return;
+
+    setWantedRequests((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, status: 'open' } : r))
+    );
+
+    // Update status in Supabase
+    supabase
+      .from('wanted_requests')
+      .update({ status: 'approved' })
+      .eq('id', id)
+      .then(({ error }) => {
+        if (error) console.warn('Supabase wanted request approve error:', error.message);
+      });
+
+    // Notify requester
+    const notif: NotificationItem = {
+      id: 'notif-' + Date.now(),
+      userId: target.studentId,
+      title: 'Wanted Request Approved! 🎉',
+      message: `Your request "${target.title}" is now live on the Wanted Board.`,
+      type: 'approval',
+      read: false,
+      timestamp: 'Just now',
+      link: '/wanted-board',
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
+    // Send email to requester
+    const student = students.find((s) => s.id === target.studentId);
+    if (student?.email) {
+      fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: student.email,
+          subject: `🎉 Your Wanted Request is Live: ${target.title}`,
+          html: `
+            <div style="font-family:sans-serif;padding:24px;border:3px solid #1C1C1C;border-radius:12px;background:#FFFBEA;">
+              <h2 style="color:#1C1C1C;margin:0 0 12px 0;">🎉 Your Wanted Request Was Approved!</h2>
+              <p>Hello ${target.studentName},</p>
+              <p>Your request for <strong>"${target.title}"</strong> has been approved by our campus moderators and is now visible to all BMSIT students on the Wanted Board.</p>
+              <p style="margin-top:20px;">
+                <a href="https://marketplace.bmsit.co.in/wanted-board" style="display:inline-block;padding:10px 18px;background:#F2A93B;color:#1C1C1C;font-weight:bold;text-decoration:none;border:2px solid #1C1C1C;border-radius:6px;">
+                  View on Wanted Board &rarr;
+                </a>
+              </p>
+            </div>
+          `,
+        }),
+      }).catch(() => {});
+    }
+
+    // Broadcast alert email to ALL registered users!
+    broadcastEmailToAllUsers(
+      `📌 New Campus Wanted Request: ${target.title}`,
+      `
+        <div style="font-family:sans-serif;padding:24px;border:3px solid #1C1C1C;border-radius:12px;background:#FFFBEA;max-width:600px;margin:0 auto;">
+          <div style="background:#FFE082;padding:12px 18px;border:2px solid #1C1C1C;border-radius:8px;margin-bottom:16px;">
+            <h2 style="color:#1C1C1C;margin:0;font-size:20px;">📌 A Student is Looking For An Item!</h2>
+          </div>
+          <p style="font-size:15px;color:#1C1C1C;margin-bottom:8px;">A fellow BMSIT student just posted an item request on the Wanted Board:</p>
+          <div style="background:#ffffff;border:2px solid #1C1C1C;border-radius:10px;padding:16px;margin:16px 0;">
+            <h3 style="margin:0 0 8px 0;font-size:18px;color:#1C1C1C;">${target.title}</h3>
+            ${target.maxBudget ? `<p style="margin:4px 0;font-size:15px;font-weight:bold;color:#1C1C1C;">Max Budget: ₹${target.maxBudget}</p>` : ''}
+            <p style="margin:4px 0;font-size:14px;color:#555;">Category: <strong>${target.category}</strong></p>
+            <p style="margin:4px 0;font-size:14px;color:#555;">Requested by: <strong>${target.studentName}</strong> (${target.studentUSN}) • ${target.studentBranch}</p>
+            ${target.description ? `<p style="margin:8px 0 0 0;font-size:13px;color:#333;font-style:italic;background:#FFFBEA;padding:8px;border-radius:6px;">"${target.description}"</p>` : ''}
+          </div>
+          <p style="font-size:14px;color:#1C1C1C;">Have this item? Fulfill their request and earn cash directly on campus!</p>
+          <p style="margin-top:20px;">
+            <a href="https://marketplace.bmsit.co.in/wanted-board" style="display:inline-block;padding:12px 24px;background:#F2A93B;color:#1C1C1C;font-weight:bold;text-decoration:none;border:2px solid #1C1C1C;border-radius:8px;box-shadow:3px 3px 0px #1C1C1C;">
+              Open Wanted Board &rarr;
+            </a>
+          </p>
+          <p style="font-size:11px;color:#888;margin-top:24px;border-top:1px solid #ddd;padding-top:12px;">
+            You are receiving this because you are a registered student on BMSIT Marketplace (marketplace.bmsit.co.in).
+          </p>
+        </div>
+      `
+    );
+
+    triggerConfetti();
+    pushToast(`Wanted request "${target.title}" approved and broadcasted to campus!`, 'success');
+  };
+
+  const rejectWantedRequest = (id: string, reason?: string) => {
+    const target = wantedRequests.find((r) => r.id === id);
+    if (!target) return;
+
+    setWantedRequests((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, status: 'rejected' } : r))
+    );
+
+    // Update status in Supabase
+    supabase
+      .from('wanted_requests')
+      .update({ status: 'rejected' })
+      .eq('id', id)
+      .then(({ error }) => {
+        if (error) console.warn('Supabase wanted request reject error:', error.message);
+      });
+
+    // Notify requester
+    const notif: NotificationItem = {
+      id: 'notif-' + Date.now(),
+      userId: target.studentId,
+      title: 'Wanted Request Declined',
+      message: `Your request "${target.title}" was not approved: ${reason || 'Does not comply with campus marketplace guidelines.'}`,
+      type: 'rejection',
+      read: false,
+      timestamp: 'Just now',
+      link: '/wanted-board',
+    };
+    setNotifications((prev) => [notif, ...prev]);
+
+    pushToast('Wanted request rejected.', 'info');
   };
 
   const updateWantedRequest = (id: string, updates: Partial<WantedRequest>) => {
@@ -1879,6 +2067,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteWantedRequest,
         closeWantedRequest,
         addWantedResponse,
+        approveWantedRequest,
+        rejectWantedRequest,
         sendMessage,
         startChatWithSeller,
         startChatWithStudent,

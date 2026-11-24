@@ -83,7 +83,7 @@ export interface WantedRequest {
   studentUSN: string;
   studentBranch: string;
   studentAdmissionYear: number;
-  status?: 'open' | 'responses_received' | 'fulfilled' | 'expired';
+  status?: 'pending_approval' | 'approved' | 'open' | 'responses_received' | 'fulfilled' | 'expired' | 'rejected';
   responses: WantedResponse[];
   expiryDate?: string;
   preferredContact?: string;

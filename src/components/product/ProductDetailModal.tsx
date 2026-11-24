@@ -11,10 +11,10 @@ import {
   Share2,
   CheckCircle2,
   Check,
-  Flag,
   ArrowRight,
   Send,
   HelpCircle,
+  Maximize2,
 } from 'lucide-react';
 import { Product } from '../../types';
 import { useApp } from '../../context/AppContext';
@@ -44,17 +44,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     isWishlisted,
     currentUser,
     pushToast,
-    submitReport,
   } = useApp();
 
   const isLoggedIn = currentUser.id !== 'guest' && Boolean(currentUser.email) && currentUser.verified;
 
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [reportModalOpen, setReportModalOpen] = useState(false);
-  const [reportReason, setReportReason] = useState('Prohibited or Dangerous Item');
-  const [reportDetails, setReportDetails] = useState('');
-  const [reportSubmitted, setReportSubmitted] = useState(false);
+  const [fullImageLightbox, setFullImageLightbox] = useState<string | null>(null);
 
   if (!isOpen || !product) return null;
 
@@ -69,11 +65,6 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const sellerOtherListings = products
     .filter((p) => p.id !== product.id && p.sellerId === product.sellerId)
     .slice(0, 3);
-
-  const discountPercent =
-    product.originalPrice && product.originalPrice > product.price
-      ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
-      : null;
 
   const handleShare = async () => {
     const shareUrl = `${window.location.origin}/?product=${product.id}`;
@@ -169,13 +160,22 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8">
             {/* Left Column: Image Gallery */}
             <div className="md:col-span-6 space-y-3">
-              {/* Main Image Frame */}
-              <div className="relative aspect-4/3 rounded-2xl border-2 border-[#1C1C1C] bg-white overflow-hidden shadow-[4px_4px_0px_#1C1C1C]">
+              {/* Main Image Frame (Clickable for full image view) */}
+              <div
+                onClick={() => setFullImageLightbox(product.images[activeImageIdx] || product.images[0])}
+                className="relative aspect-4/3 rounded-2xl border-2 border-[#1C1C1C] bg-white overflow-hidden shadow-[4px_4px_0px_#1C1C1C] cursor-zoom-in group"
+                title="Click to view full image"
+              >
                 <img
                   src={product.images[activeImageIdx] || product.images[0]}
                   alt={product.title}
-                  className={`w-full h-full object-cover ${isSold ? 'grayscale-40' : ''}`}
+                  className={`w-full h-full object-cover transition-transform duration-200 group-hover:scale-102 ${isSold ? 'grayscale-40' : ''}`}
                 />
+
+                <div className="absolute top-3 right-3 px-2 py-1 rounded-lg bg-black/70 backdrop-blur-xs text-white text-[11px] font-bold flex items-center gap-1 opacity-90 group-hover:opacity-100 transition shadow-[1px_1px_0px_#1C1C1C]">
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>Full View</span>
+                </div>
 
                 {isSold && (
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
@@ -199,7 +199,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     <button
                       key={idx}
                       onClick={() => setActiveImageIdx(idx)}
-                      className={`w-16 h-16 rounded-xl border-2 overflow-hidden transition ${
+                      className={`w-16 h-16 rounded-xl border-2 overflow-hidden transition cursor-pointer ${
                         activeImageIdx === idx
                           ? 'border-[#1C1C1C] ring-2 ring-[#F2A93B] shadow-[2px_2px_0px_#1C1C1C]'
                           : 'border-[#1C1C1C]/30 opacity-70 hover:opacity-100'
@@ -234,7 +234,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   {product.title}
                 </h1>
 
-                {/* Price Display */}
+                {/* Price Display (No % OFF) */}
                 <div className="p-4 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] flex items-baseline justify-between">
                   <div>
                     <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider block">
@@ -251,12 +251,6 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       )}
                     </div>
                   </div>
-
-                  {discountPercent && discountPercent > 0 && (
-                    <span className="nb-sticker rose text-xs py-1 px-2.5">
-                      {discountPercent}% OFF
-                    </span>
-                  )}
                 </div>
 
                 {/* Description (if present) */}
@@ -345,26 +339,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     </button>
                 )}
 
-                <div className="flex items-center justify-between pt-1">
-                  {!isOwner && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!isLoggedIn) {
-                          onClose();
-                          if (onOpenAuth) onOpenAuth();
-                          return;
-                        }
-                        setReportSubmitted(false);
-                        setReportModalOpen(true);
-                      }}
-                      className="text-[11px] text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1 font-semibold transition cursor-pointer"
-                    >
-                      <Flag className="w-3.5 h-3.5 text-rose-500" />
-                      <span>Report listing</span>
-                    </button>
-                  )}
-                  <div className="text-[11px] text-neutral-500 font-mono ml-auto">
+                <div className="flex items-center justify-end pt-1">
+                  <div className="text-[11px] text-neutral-500 font-mono">
                     ID: {product.id}
                   </div>
                 </div>
@@ -438,109 +414,30 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         </div>
       </div>
 
-      {/* Moderation Report Modal */}
-      {reportModalOpen && (
-        <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#FFFBF5] rounded-3xl border-3 border-[#1C1C1C] shadow-[6px_6px_0px_#1C1C1C] max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in duration-150">
-            <div className="flex items-center justify-between pb-3 border-b-2 border-[#1C1C1C]/15">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-rose-100 rounded-xl border-2 border-[#1C1C1C] text-rose-600">
-                  <Flag className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-head font-extrabold text-lg text-[#1C1C1C]">Report Listing</h3>
-                  <p className="text-[11px] text-neutral-500 truncate max-w-[220px]">{product.title}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setReportModalOpen(false)}
-                className="p-1.5 rounded-lg border-2 border-[#1C1C1C] bg-white hover:bg-neutral-100 cursor-pointer"
-              >
-                <X className="w-4 h-4 text-[#1C1C1C]" />
-              </button>
-            </div>
-
-            {reportSubmitted ? (
-              <div className="p-5 bg-emerald-50 rounded-2xl border-2 border-emerald-800 text-center space-y-2">
-                <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
-                <h4 className="font-head font-bold text-base text-emerald-900">Report Received</h4>
-                <p className="text-xs text-emerald-800 leading-relaxed">
-                  Thank you for keeping BMSIT safe. Our moderators and admin have been immediately notified via email.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setReportModalOpen(false)}
-                  className="mt-3 px-4 py-2 rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] font-bold text-xs shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#e49b2f] cursor-pointer"
-                >
-                  Done
-                </button>
-              </div>
-            ) : (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  submitReport({
-                    targetType: 'product',
-                    targetId: product.id,
-                    targetTitle: product.title,
-                    reporterId: currentUser.id,
-                    reporterName: currentUser.name,
-                    reason: reportReason,
-                    details: reportDetails,
-                  });
-                  setReportSubmitted(true);
-                }}
-                className="space-y-4"
-              >
-                <div>
-                  <label className="block text-xs font-bold text-[#1C1C1C] mb-1.5">
-                    Why are you reporting this listing?
-                  </label>
-                  <select
-                    value={reportReason}
-                    onChange={(e) => setReportReason(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border-2 border-[#1C1C1C] bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#F2A93B]"
-                  >
-                    <option value="Prohibited or Dangerous Item">Prohibited or Dangerous Item</option>
-                    <option value="Scam, Fraud or Counterfeit">Scam, Fraud or Counterfeit</option>
-                    <option value="Inappropriate Content or Photos">Inappropriate Content or Photos</option>
-                    <option value="Overpriced / Scalping / Commercial Sale">Overpriced / Scalping / Commercial Sale</option>
-                    <option value="Misleading Information or Wrong Category">Misleading Information or Wrong Category</option>
-                    <option value="Other Policy Violation">Other Policy Violation</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#1C1C1C] mb-1.5">
-                    Additional Details (Optional)
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={reportDetails}
-                    onChange={(e) => setReportDetails(e.target.value)}
-                    placeholder="Describe what's wrong with this listing..."
-                    className="w-full p-3 rounded-xl border-2 border-[#1C1C1C] bg-white text-xs placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#F2A93B] resize-none"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setReportModalOpen(false)}
-                    className="flex-1 py-2.5 px-4 rounded-xl border-2 border-[#1C1C1C] bg-white font-bold text-xs hover:bg-neutral-100 cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-2.5 px-4 rounded-xl border-2 border-[#1C1C1C] bg-rose-600 text-white font-bold text-xs shadow-[3px_3px_0px_#1C1C1C] hover:bg-rose-700 active:translate-x-0.5 active:translate-y-0.5 cursor-pointer"
-                  >
-                    Submit Report
-                  </button>
-                </div>
-              </form>
-            )}
+      {/* Full Image Lightbox Modal */}
+      {fullImageLightbox && (
+        <div
+          onClick={() => setFullImageLightbox(null)}
+          className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200 cursor-zoom-out"
+        >
+          <div
+            className="relative max-w-4xl max-h-[90vh] flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setFullImageLightbox(null)}
+              className="absolute -top-12 right-0 p-2 text-white hover:text-[#F2A93B] cursor-pointer transition flex items-center gap-1 font-bold text-xs"
+              aria-label="Close full view"
+            >
+              <span>Close</span>
+              <X className="w-6 h-6" />
+            </button>
+            <img
+              src={fullImageLightbox}
+              alt={product.title}
+              className="max-w-full max-h-[85vh] object-contain rounded-2xl border-3 border-[#1C1C1C] shadow-[8px_8px_0px_#1C1C1C] bg-white"
+            />
           </div>
         </div>
       )}

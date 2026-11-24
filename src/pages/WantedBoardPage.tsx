@@ -45,10 +45,16 @@ export const WantedBoardPage: React.FC<WantedBoardPageProps> = ({ onOpenChat, on
     'Other',
   ];
 
-  // Filtered requests by Category
+  // Filtered requests by Category (Moderator review enforced)
   const filteredRequests = useMemo(() => {
     return wantedRequests
       .filter((r: WantedRequest) => {
+        const isApproved = r.status === 'open' || r.status === 'approved' || r.status === 'responses_received';
+        const isOwner = currentUser?.id && r.studentId === currentUser.id;
+        // Strictly hide pending/rejected requests from other users until approved by moderator
+        if (!isApproved && !isOwner) {
+          return false;
+        }
         if (categoryFilter !== 'All' && r.category !== categoryFilter) {
           return false;
         }
@@ -57,7 +63,7 @@ export const WantedBoardPage: React.FC<WantedBoardPageProps> = ({ onOpenChat, on
       .sort((a: WantedRequest, b: WantedRequest) => {
         return new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime();
       });
-  }, [wantedRequests, categoryFilter]);
+  }, [wantedRequests, categoryFilter, currentUser?.id]);
 
   // Handle Create Request (No budget, no needed-by-date)
   const handleCreateRequest = (e: React.FormEvent) => {
@@ -196,11 +202,23 @@ export const WantedBoardPage: React.FC<WantedBoardPageProps> = ({ onOpenChat, on
                   className="p-5 rounded-2xl border-2 border-[#1C1C1C] bg-white flex flex-col justify-between shadow-[4px_4px_0px_#1C1C1C] hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[5.5px_5.5px_0px_#1C1C1C] transition-all duration-200"
                 >
                   <div className="space-y-3">
-                    {/* Category Pill and Posted Date */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#1C1C1C] bg-[#FFE082] px-2.5 py-1 rounded-md border border-[#1C1C1C] shadow-[1px_1px_0px_#1C1C1C]">
-                        {req.category}
-                      </span>
+                    {/* Category Pill, Status and Posted Date */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#1C1C1C] bg-[#FFE082] px-2.5 py-1 rounded-md border border-[#1C1C1C] shadow-[1px_1px_0px_#1C1C1C]">
+                          {req.category}
+                        </span>
+                        {(req.status === 'pending_approval' || (req as any).status === 'pending') && (
+                          <span className="text-[10px] font-bold text-[#1C1C1C] bg-[#F2A93B] px-2 py-0.5 rounded-md border border-[#1C1C1C] shadow-[1px_1px_0px_#1C1C1C]">
+                            ⏳ Pending Approval
+                          </span>
+                        )}
+                        {req.status === 'rejected' && (
+                          <span className="text-[10px] font-bold text-white bg-rose-600 px-2 py-0.5 rounded-md border border-[#1C1C1C] shadow-[1px_1px_0px_#1C1C1C]">
+                            Declined
+                          </span>
+                        )}
+                      </div>
 
                       <span className="text-[11px] font-mono text-neutral-500 flex items-center gap-1">
                         <Calendar className="w-3 h-3 text-neutral-400" />
@@ -237,8 +255,10 @@ export const WantedBoardPage: React.FC<WantedBoardPageProps> = ({ onOpenChat, on
                   {/* Direct Chat Action */}
                   <div className="pt-4 border-t border-neutral-100 mt-4">
                     {isOwner ? (
-                      <div className="text-center py-2 text-xs font-bold text-neutral-600 bg-neutral-100 rounded-xl border border-neutral-300">
-                        Posted by You
+                      <div className="text-center py-2 text-xs font-bold text-neutral-700 bg-[#FFFBEA] rounded-xl border border-[#1C1C1C]">
+                        {req.status === 'pending_approval' || (req as any).status === 'pending'
+                          ? '⏳ Awaiting Moderator Approval (Only visible to you)'
+                          : 'Posted by You'}
                       </div>
                     ) : (
                       <button
