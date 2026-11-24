@@ -768,7 +768,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               <div className="pt-4 border-t border-[#1C1C1C]/15 flex items-center justify-between">
                 <button
                   type="button"
-                  onClick={logoutUser}
+                  onClick={() => logoutUser()}
                   className="px-4 py-2 text-xs font-bold rounded-xl border-2 border-[#1C1C1C] bg-white text-[#E1467A] shadow-[2px_2px_0px_#1C1C1C] hover:bg-rose-50 transition cursor-pointer flex items-center gap-2"
                 >
                   <LogOut className="w-4 h-4" />

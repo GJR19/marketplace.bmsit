@@ -102,12 +102,14 @@ interface AppContextType {
   switchUser: (studentId: string) => void;
   registerUser: (userData: Partial<Student>) => Student;
   updateProfile: (updates: Partial<Student>) => void;
-  logoutUser: () => Promise<void>;
+  logoutUser: (customMessage?: string | unknown) => Promise<void>;
   toggleAdminMode: () => void;
 
   // Reset
   resetDemoData: () => void;
 }
+
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes of user inactivity
 
 const STORAGE_KEYS = {
   PRODUCTS: 'marketplace_bmsit_products_v4',
@@ -119,6 +121,7 @@ const STORAGE_KEYS = {
   NOTIFICATIONS: 'marketplace_bmsit_notifs_v4',
   REPORTS: 'marketplace_bmsit_reports_v4',
   LOGS: 'marketplace_bmsit_logs_v4',
+  LAST_ACTIVITY: 'marketplace_bmsit_last_activity_v4',
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -1718,13 +1721,77 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pushToast('Profile updated successfully!', 'success');
   };
 
-  const logoutUser = async () => {
+  const logoutUser = async (customMessage?: string | unknown) => {
     await supabase.auth.signOut();
     localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+    localStorage.removeItem(STORAGE_KEYS.LAST_ACTIVITY);
     setCurrentUserState(GUEST_STUDENT);
     setIsAdminMode(false);
-    pushToast('Signed out of BMSIT Marketplace.', 'info');
+    const msg = typeof customMessage === 'string' ? customMessage : 'Signed out of BMSIT Marketplace.';
+    pushToast(msg, 'info');
   };
+
+  // Automatic Inactivity Logout (Logs out after 30 minutes of no user interaction)
+  useEffect(() => {
+    // Only monitor if the user is authenticated (not a guest)
+    if (!currentUser || currentUser.id === 'guest' || !currentUser.email) {
+      return;
+    }
+
+    // Set initial activity timestamp if none exists
+    if (!localStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY)) {
+      localStorage.setItem(STORAGE_KEYS.LAST_ACTIVITY, Date.now().toString());
+    }
+
+    const checkInactivity = async () => {
+      const lastActiveStr = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY);
+      if (!lastActiveStr) return;
+      const lastActive = parseInt(lastActiveStr, 10);
+      const elapsed = Date.now() - lastActive;
+
+      if (elapsed >= INACTIVITY_TIMEOUT_MS) {
+        localStorage.removeItem(STORAGE_KEYS.LAST_ACTIVITY);
+        await logoutUser('You have been logged out due to 30 minutes of inactivity.');
+      }
+    };
+
+    let lastRecorded = Date.now();
+    const handleUserActivity = () => {
+      const now = Date.now();
+      // Throttle updates to localStorage to once every 10 seconds
+      if (now - lastRecorded > 10000) {
+        lastRecorded = now;
+        localStorage.setItem(STORAGE_KEYS.LAST_ACTIVITY, now.toString());
+      }
+    };
+
+    // User interaction events to detect activity across mouse, keyboard, touch, and scroll
+    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    activityEvents.forEach((event) => {
+      window.addEventListener(event, handleUserActivity, { passive: true });
+    });
+
+    // Check periodically every 15 seconds
+    const intervalId = setInterval(checkInactivity, 15000);
+
+    // Check immediately when tab becomes visible or receives focus
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkInactivity();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', checkInactivity);
+
+    return () => {
+      activityEvents.forEach((event) => {
+        window.removeEventListener(event, handleUserActivity);
+      });
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', checkInactivity);
+    };
+  }, [currentUser.id, currentUser.email]);
 
   const toggleAdminMode = () => {
     if (!isAdminMode) {
