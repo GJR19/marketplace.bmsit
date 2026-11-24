@@ -400,7 +400,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   setUserMenuOpen(!userMenuOpen);
                   setNotifDropdownOpen(false);
                 }}
-                className={`flex items-center gap-1.5 sm:gap-2 p-1.5 sm:pl-2 sm:pr-3 sm:py-2 rounded-xl border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] transition cursor-pointer shrink-0 ${
+                className={`flex items-center gap-1.5 sm:gap-2 p-0 sm:pl-2 sm:pr-3 sm:py-2 rounded-xl border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] transition cursor-pointer shrink-0 overflow-hidden w-9 h-9 sm:w-auto sm:h-auto ${
                   activeTab === 'dashboard'
                     ? 'bg-[#F2A93B] text-[#1C1C1C]'
                     : 'bg-white text-[#1C1C1C] hover:bg-[#FFE082]'
@@ -411,7 +411,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <img
                   src={currentUser.avatar}
                   alt={currentUser.name}
-                  className="w-6 h-6 rounded-lg border border-[#1C1C1C] object-cover shrink-0"
+                  className="w-full h-full sm:w-6 sm:h-6 object-cover shrink-0 sm:rounded-lg sm:border sm:border-[#1C1C1C]"
                 />
                 <span className="text-xs sm:text-sm font-extrabold text-[#1C1C1C] hidden sm:inline">
                   My Account
