@@ -263,21 +263,85 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     setEditModalOpen(true);
   };
 
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 4 * 1024 * 1024) {
-        pushToast('Image file size must be less than 4MB', 'warning');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          updateProfile({ avatar: event.target.result as string });
-          pushToast('Profile photo updated successfully!', 'success');
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      pushToast('Image file size must be less than 10MB', 'warning');
+      return;
+    }
+
+    try {
+      pushToast('Processing and updating profile picture...', 'info');
+
+      // 1. Downscale/compress image using an off-screen HTML5 canvas to max 400x400
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = reject;
+        img.src = objectUrl;
+      });
+
+      const maxDim = 400;
+      let width = img.width;
+      let height = img.height;
+      if (width > height) {
+        if (width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
         }
-      };
-      reader.readAsDataURL(file);
+      } else {
+        if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+      }
+      URL.revokeObjectURL(objectUrl);
+
+      // Lightweight compressed JPEG data URL (~30-50KB)
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+      let finalAvatarUrl = compressedDataUrl;
+
+      // 2. Also attempt upload to Supabase Storage if possible
+      try {
+        const blob = await new Promise<Blob | null>((resolve) =>
+          canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.88)
+        );
+        if (blob) {
+          const filePath = `avatars/${currentUser.id || 'user'}-${Date.now()}.jpg`;
+          const { error: uploadError } = await supabase.storage
+            .from('marketplace-images')
+            .upload(filePath, blob, { upsert: true });
+
+          if (!uploadError) {
+            const { data: publicUrlData } = supabase.storage
+              .from('marketplace-images')
+              .getPublicUrl(filePath);
+            if (publicUrlData?.publicUrl) {
+              finalAvatarUrl = publicUrlData.publicUrl;
+            }
+          }
+        }
+      } catch (storageErr) {
+        console.warn('Storage upload fallback to compressed Data URL:', storageErr);
+      }
+
+      // 3. Update profile state and Supabase profiles table
+      updateProfile({ avatar: finalAvatarUrl });
+      pushToast('Profile photo updated successfully!', 'success');
+    } catch (err) {
+      console.error('Avatar upload failed:', err);
+      pushToast('Failed to process image. Please try another photo.', 'error');
     }
   };
 

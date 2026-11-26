@@ -93,7 +93,6 @@ export const WantedBoardPage: React.FC<WantedBoardPageProps> = ({ onOpenChat, on
     setCreateModalOpen(false);
     setTitle('');
     setDescription('');
-    pushToast('Wanted request posted successfully to the board!', 'success');
   };
 
   // Direct chat / make offer with requester

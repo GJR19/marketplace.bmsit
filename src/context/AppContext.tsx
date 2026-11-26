@@ -170,7 +170,14 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [products, setProducts] = useState<Product[]>([]);
 
-  const [students, setStudents] = useState<Student[]>([]);
+  const [students, setStudents] = useState<Student[]>(() => {
+    try {
+      const saved = safeLocalStorage.getItem(STORAGE_KEYS.STUDENTS);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   const [currentUser, setCurrentUserState] = useState<Student>(() => {
     const saved = safeLocalStorage.getItem(STORAGE_KEYS.CURRENT_USER);
@@ -198,7 +205,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [compareList, setCompareList] = useState<string[]>([]);
 
-  const [wantedRequests, setWantedRequests] = useState<WantedRequest[]>([]);
+  const [wantedRequests, setWantedRequests] = useState<WantedRequest[]>(() => {
+    try {
+      const saved = safeLocalStorage.getItem(STORAGE_KEYS.WANTED);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   const [allChats, setAllChats] = useState<ChatConversation[]>([]);
 
@@ -229,6 +243,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     safeLocalStorage.setItem(STORAGE_KEYS.WISHLIST, JSON.stringify(wishlist));
   }, [wishlist]);
+
+  useEffect(() => {
+    if (wantedRequests.length > 0) {
+      safeLocalStorage.setItem(STORAGE_KEYS.WANTED, JSON.stringify(wantedRequests));
+    }
+  }, [wantedRequests]);
+
+  useEffect(() => {
+    if (students.length > 0) {
+      safeLocalStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
+    }
+  }, [students]);
 
   // Toast Helpers
   const pushToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'success') => {
@@ -396,7 +422,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Supabase Live Wanted Requests Hydration
   const loadLiveWantedRequests = async () => {
     try {
-      const { data, error } = await supabase
+      let reqRows: any[] = [];
+
+      // Attempt join on profiles first
+      const { data: joinData, error: joinErr } = await supabase
         .from('wanted_requests')
         .select(`
           id,
@@ -417,24 +446,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         `)
         .order('created_at', { ascending: false });
 
-      if (!error && data) {
-        const liveReqs: WantedRequest[] = data.map((row: any) => ({
-          id: row.id,
-          title: row.title,
-          category: row.category as ProductCategory,
-          description: row.description || '',
-          maxBudget: row.max_budget ? Number(row.max_budget) : undefined,
-          studentId: row.requester_id,
-          studentName: row.requester?.full_name || 'BMSIT Student',
-          studentUSN: row.requester?.usn || '1BY24XX000',
-          studentBranch: row.requester?.branch || 'Engineering',
-          studentAdmissionYear: Number(row.requester?.admission_year) || 2024,
-          status: (row.status === 'pending' || row.status === 'pending_approval') ? 'pending_approval' : (row.status || 'open'),
-          responses: [],
-          postedDate: row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
-        }));
+      if (!joinErr && joinData && joinData.length > 0) {
+        reqRows = joinData;
+      } else {
+        // Fallback to direct select without relational join
+        const { data: fallbackData } = await supabase
+          .from('wanted_requests')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (fallbackData && fallbackData.length > 0) {
+          reqRows = fallbackData;
+        }
+      }
 
-        setWantedRequests(liveReqs);
+      if (reqRows.length > 0) {
+        const liveReqs: WantedRequest[] = reqRows.map((row: any) => {
+          const matchedProfile = students.find((s) => s.id === row.requester_id);
+          return {
+            id: row.id,
+            title: row.title,
+            category: row.category as ProductCategory,
+            description: row.description || '',
+            maxBudget: row.max_budget ? Number(row.max_budget) : undefined,
+            studentId: row.requester_id,
+            studentName: row.requester?.full_name || row.student_name || matchedProfile?.name || 'BMSIT Student',
+            studentUSN: row.requester?.usn || row.student_usn || matchedProfile?.usn || '1BY24XX000',
+            studentBranch: row.requester?.branch || row.student_branch || matchedProfile?.branch || 'Engineering',
+            studentAdmissionYear: Number(row.requester?.admission_year || row.student_admission_year || matchedProfile?.admissionYear) || 2024,
+            status: (row.status === 'pending' || row.status === 'pending_approval') ? 'pending_approval' : (row.status || 'open'),
+            responses: [],
+            postedDate: row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+          };
+        });
+
+        setWantedRequests((prev) => {
+          const map = new Map<string, WantedRequest>();
+          // Preserve local requests
+          prev.forEach((r) => map.set(r.id, r));
+          // Overlay DB rows
+          liveReqs.forEach((r) => map.set(r.id, r));
+          const merged = Array.from(map.values()).sort(
+            (a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime()
+          );
+          safeLocalStorage.setItem(STORAGE_KEYS.WANTED, JSON.stringify(merged));
+          return merged;
+        });
       }
     } catch (err) {
       console.warn('Failed to fetch wanted requests from Supabase:', err);
@@ -473,7 +529,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const { data, error } = await supabase.from('profiles').select('*');
       if (!error && data) {
-        setStudents(data.map((p: any) => profileToStudent(p)));
+        const liveStudents = data.map((p: any) => profileToStudent(p));
+        setStudents((prev) => {
+          const map = new Map<string, Student>();
+          prev.forEach((s) => map.set(s.id, s));
+          liveStudents.forEach((s) => {
+            const existing = map.get(s.id);
+            // If existing had a custom avatar and new row doesn't, keep existing custom avatar!
+            if (
+              existing?.avatar &&
+              !existing.avatar.includes('api.dicebear.com') &&
+              (!s.avatar || s.avatar.includes('api.dicebear.com'))
+            ) {
+              map.set(s.id, { ...s, avatar: existing.avatar });
+            } else {
+              map.set(s.id, s);
+            }
+          });
+          const merged = Array.from(map.values());
+          safeLocalStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(merged));
+          return merged;
+        });
       }
     } catch (err) {
       console.warn('Failed to fetch students from Supabase:', err);
@@ -1137,7 +1213,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       responses: [],
     };
 
-    setWantedRequests((prev) => [newReq, ...prev]);
+    setWantedRequests((prev) => {
+      const updated = [newReq, ...prev.filter((r) => r.id !== reqId)];
+      safeLocalStorage.setItem(STORAGE_KEYS.WANTED, JSON.stringify(updated));
+      return updated;
+    });
 
     // Insert into Supabase with pending status
     if (currentUser?.id) {
@@ -1897,10 +1977,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateProfile = (updates: Partial<Student>) => {
-    setCurrentUserState((prev) => ({ ...prev, ...updates }));
-    setStudents((prev) =>
-      prev.map((s) => (s.id === currentUser.id ? { ...s, ...updates } : s))
-    );
+    setCurrentUserState((prev) => {
+      const updated = { ...prev, ...updates };
+      safeLocalStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(updated));
+      return updated;
+    });
+    setStudents((prev) => {
+      const updated = prev.map((s) => (s.id === currentUser.id ? { ...s, ...updates } : s));
+      safeLocalStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(updated));
+      return updated;
+    });
 
     // Sync profile updates to Supabase profiles table
     if (isUUID(currentUser.id)) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   Shield,
@@ -22,6 +22,8 @@ import {
   FileText,
   MapPin,
   Tag,
+  Maximize2,
+  X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Product, Student, ProductCategory, ListingStatus, WantedRequest } from '../types';
@@ -49,6 +51,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     unsuspendUser,
     approveWantedRequest,
     rejectWantedRequest,
+    deleteWantedRequest,
     resetDemoData,
     currentUser,
     pushToast,
@@ -81,6 +84,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   // Inspection preview modal
   const [inspectProduct, setInspectProduct] = useState<Product | null>(null);
   const [activeInspectImgIdx, setActiveInspectImgIdx] = useState<number>(0);
+  const [fullImageLightbox, setFullImageLightbox] = useState<string | null>(null);
 
   // Wanted filter
   const [wantedFilter, setWantedFilter] = useState<'pending_approval' | 'approved' | 'all'>('pending_approval');
@@ -188,31 +192,107 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
         setDbProducts(mapped);
       }
 
-      // 2. Fetch live users from admin RPC
-      const { data: userData, error: userErr } = await supabase.rpc('admin_get_all_users');
-      if (!userErr && userData && userData.length > 0) {
-        setDbUsers(userData);
+      // 2. Fetch live users from profiles table AND admin RPC
+      let loadedUsers: any[] = [];
+      try {
+        const { data: profilesData } = await supabase.from('profiles').select('*');
+        if (profilesData && profilesData.length > 0) {
+          loadedUsers = profilesData;
+        }
+      } catch {}
+
+      try {
+        const { data: userData } = await supabase.rpc('admin_get_all_users');
+        if (userData && userData.length > 0) {
+          const userMap = new Map<string, any>();
+          loadedUsers.forEach((u) => userMap.set(u.id, u));
+          userData.forEach((u: any) => {
+            const existing = userMap.get(u.id) || {};
+            userMap.set(u.id, {
+              ...existing,
+              ...u,
+              avatar_url: u.avatar_url || existing.avatar_url || existing.avatar,
+            });
+          });
+          loadedUsers = Array.from(userMap.values());
+        }
+      } catch {}
+
+      if (loadedUsers.length > 0) {
+        setDbUsers(loadedUsers);
       }
 
-      // 3. Fetch live wanted requests from admin RPC
-      const { data: wantedData, error: wantedErr } = await supabase.rpc('admin_get_all_wanted_requests');
-      if (!wantedErr && wantedData && wantedData.length > 0) {
-        const mappedWanted: WantedRequest[] = wantedData.map((row: any) => ({
-          id: row.id,
-          title: row.title,
-          category: row.category as ProductCategory,
-          description: row.description || '',
-          maxBudget: row.max_budget ? Number(row.max_budget) : undefined,
-          studentId: row.requester_id,
-          studentName: row.student_name || 'BMSIT Student',
-          studentUSN: row.student_usn || '1BY24XX000',
-          studentBranch: row.student_branch || 'Engineering',
-          studentAdmissionYear: Number(row.student_admission_year) || 2024,
-          status: (row.status === 'pending' || row.status === 'pending_approval') ? 'pending_approval' : (row.status || 'open'),
-          responses: [],
-          postedDate: row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
-        }));
-        setDbWantedRequests(mappedWanted);
+      // 3. Fetch live wanted requests directly from table AND admin RPC
+      let loadedWanted: WantedRequest[] = [];
+      try {
+        const { data: directWanted } = await supabase
+          .from('wanted_requests')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (directWanted && directWanted.length > 0) {
+          loadedWanted = directWanted.map((row: any) => {
+            const student =
+              loadedUsers.find((u) => u.id === row.requester_id) ||
+              students.find((s) => s.id === row.requester_id);
+            return {
+              id: row.id,
+              title: row.title,
+              category: row.category as ProductCategory,
+              description: row.description || '',
+              maxBudget: row.max_budget ? Number(row.max_budget) : undefined,
+              studentId: row.requester_id,
+              studentName: row.student_name || student?.full_name || student?.name || 'BMSIT Student',
+              studentUSN: row.student_usn || student?.usn || '1BY24XX000',
+              studentBranch: row.student_branch || student?.branch || 'Engineering',
+              studentAdmissionYear:
+                Number(row.student_admission_year || student?.admission_year || student?.admissionYear) ||
+                2024,
+              status:
+                row.status === 'pending' || row.status === 'pending_approval'
+                  ? 'pending_approval'
+                  : row.status || 'open',
+              responses: [],
+              postedDate: row.created_at
+                ? row.created_at.split('T')[0]
+                : new Date().toISOString().split('T')[0],
+            };
+          });
+        }
+      } catch {}
+
+      try {
+        const { data: wantedData } = await supabase.rpc('admin_get_all_wanted_requests');
+        if (wantedData && wantedData.length > 0) {
+          const rpcMapped: WantedRequest[] = wantedData.map((row: any) => ({
+            id: row.id,
+            title: row.title,
+            category: row.category as ProductCategory,
+            description: row.description || '',
+            maxBudget: row.max_budget ? Number(row.max_budget) : undefined,
+            studentId: row.requester_id,
+            studentName: row.student_name || 'BMSIT Student',
+            studentUSN: row.student_usn || '1BY24XX000',
+            studentBranch: row.student_branch || 'Engineering',
+            studentAdmissionYear: Number(row.student_admission_year) || 2024,
+            status:
+              row.status === 'pending' || row.status === 'pending_approval'
+                ? 'pending_approval'
+                : row.status || 'open',
+            responses: [],
+            postedDate: row.created_at
+              ? row.created_at.split('T')[0]
+              : new Date().toISOString().split('T')[0],
+          }));
+          const wantedMap = new Map<string, WantedRequest>();
+          loadedWanted.forEach((r) => wantedMap.set(r.id, r));
+          rpcMapped.forEach((r) => wantedMap.set(r.id, r));
+          loadedWanted = Array.from(wantedMap.values());
+        }
+      } catch {}
+
+      if (loadedWanted.length > 0) {
+        setDbWantedRequests(loadedWanted);
       }
     } catch (e) {
       console.warn('Error loading admin data:', e);
@@ -227,29 +307,56 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     }
   }, [isAdminAuthenticated]);
 
-  // Combined Live & Fallback Collections
+  // Combined Live & Fallback Collections - merges DB and AppContext state seamlessly
   const currentProducts = dbProducts.length > 0 ? dbProducts : products;
-  const currentWantedRequests = dbWantedRequests.length > 0 ? dbWantedRequests : wantedRequests;
-  const currentStudents: Student[] = dbUsers.length > 0
-    ? dbUsers.map((u: any) => ({
+
+  const currentWantedRequests = useMemo(() => {
+    const map = new Map<string, WantedRequest>();
+    wantedRequests.forEach((r) => map.set(r.id, r));
+    dbWantedRequests.forEach((r) => map.set(r.id, r));
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime()
+    );
+  }, [dbWantedRequests, wantedRequests]);
+
+  const currentStudents: Student[] = useMemo(() => {
+    const list = dbUsers.length > 0 ? dbUsers : students;
+    return list.map((u: any) => {
+      const localMatch = students.find((s) => s.id === u.id || (u.usn && s.usn === u.usn));
+      const isSelf = currentUser && (currentUser.id === u.id || (u.usn && currentUser.usn === u.usn));
+      const resolvedAvatar =
+        (isSelf && currentUser.avatar && !currentUser.avatar.includes('api.dicebear.com'))
+          ? currentUser.avatar
+          : (u.avatar_url && !u.avatar_url.includes('api.dicebear.com'))
+          ? u.avatar_url
+          : (localMatch?.avatar && !localMatch.avatar.includes('api.dicebear.com'))
+          ? localMatch.avatar
+          : u.avatar_url || u.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${u.usn || u.id}`;
+
+      return {
         id: u.id,
-        name: u.full_name || 'Student',
-        email: u.college_email || '',
-        usn: u.usn || '',
-        branch: u.branch || 'Engineering',
-        admissionYear: Number(u.admission_year) || 2024,
-        currentYear: u.current_year || 'Student',
-        avatar: u.avatar_url || u.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${u.usn || u.id}`,
-        role: 'student' as const,
-        verified: Boolean(u.is_verified),
-        status: (u.is_suspended ? 'suspended' : 'active') as 'suspended' | 'active',
-        phone: u.phone || '',
-      }))
-    : students;
+        name: u.full_name || u.name || localMatch?.name || 'Student',
+        email: u.college_email || u.email || localMatch?.email || '',
+        usn: u.usn || localMatch?.usn || '',
+        branch: u.branch || localMatch?.branch || 'Engineering',
+        admissionYear: Number(u.admission_year || u.admissionYear || localMatch?.admissionYear) || 2024,
+        currentYear: u.current_year || u.currentYear || localMatch?.currentYear || 'Student',
+        avatar: resolvedAvatar,
+        role: (u.role === 'admin' ? 'admin' : 'student') as 'student' | 'admin',
+        verified: Boolean(u.is_verified ?? localMatch?.verified ?? true),
+        status: (u.is_suspended || u.status === 'suspended' ? 'suspended' : 'active') as 'suspended' | 'active',
+        phone: u.phone || localMatch?.phone || '',
+      };
+    });
+  }, [dbUsers, students, currentUser]);
 
   const handleDeleteWanted = async (id: string) => {
+    deleteWantedRequest(id);
     setDbWantedRequests((prev) => prev.filter((r) => r.id !== id));
-    await supabase.rpc('admin_delete_wanted_request', { p_request_id: id });
+    try {
+      await supabase.from('wanted_requests').delete().eq('id', id);
+      await supabase.rpc('admin_delete_wanted_request', { p_request_id: id });
+    } catch {}
     pushToast('Wanted request removed by admin.', 'info');
   };
 
@@ -575,11 +682,20 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                     className="p-5 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] flex flex-col md:flex-row md:items-center justify-between gap-4"
                   >
                     <div className="flex items-start sm:items-center gap-4 min-w-0">
-                      <img
-                        src={p.images[0]}
-                        alt={p.title}
-                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover border-2 border-[#1C1C1C] shrink-0"
-                      />
+                      <div
+                        onClick={() => p.images[0] && setFullImageLightbox(p.images[0])}
+                        className="relative cursor-zoom-in group shrink-0"
+                        title="Click to view full screen"
+                      >
+                        <img
+                          src={p.images[0]}
+                          alt={p.title}
+                          className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover border-2 border-[#1C1C1C] group-hover:opacity-90 transition shadow-[2px_2px_0px_#1C1C1C]"
+                        />
+                        <span className="absolute bottom-1 right-1 p-1 bg-black/75 text-white rounded-md opacity-0 group-hover:opacity-100 transition">
+                          <Maximize2 className="w-3 h-3" />
+                        </span>
+                      </div>
 
                       <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-2">
@@ -855,7 +971,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
         <div className="space-y-4">
           <div className="p-4 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] flex items-center justify-between">
             <h3 className="font-head font-bold text-base text-[#1C1C1C]">
-              Registered BMSIT Students ({students.length})
+              Registered BMSIT Students ({currentStudents.length})
             </h3>
             <div className="relative w-64">
               <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-2.5" />
@@ -892,7 +1008,9 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                           <img
                             src={s.avatar}
                             alt={s.name}
-                            className="w-8 h-8 rounded-full border border-[#1C1C1C] object-cover"
+                            onClick={() => s.avatar && setFullImageLightbox(s.avatar)}
+                            className="w-9 h-9 rounded-full border-2 border-[#1C1C1C] object-cover cursor-zoom-in hover:scale-110 transition shadow-[1px_1px_0px_#1C1C1C] shrink-0"
+                            title="Click to view student DP in full screen"
                           />
                           <div>
                             <div className="font-bold text-[#1C1C1C]">{s.name}</div>
@@ -1130,15 +1248,27 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               </button>
             </div>
 
-            {/* Main Preview Image */}
-            <div className="relative">
+            {/* Main Preview Image (Clickable for full screen) */}
+            <div
+              onClick={() => {
+                const currentImg =
+                  inspectProduct.images[activeInspectImgIdx] || inspectProduct.images[0];
+                if (currentImg) setFullImageLightbox(currentImg);
+              }}
+              className="relative cursor-zoom-in group rounded-xl overflow-hidden border-2 border-[#1C1C1C] bg-[#1C1C1C]/5 shadow-[2px_2px_0px_#1C1C1C]"
+              title="Click to view full screen"
+            >
               <img
                 src={inspectProduct.images[activeInspectImgIdx] || inspectProduct.images[0]}
                 alt={inspectProduct.title}
-                className="w-full h-56 object-cover rounded-xl border-2 border-[#1C1C1C]"
+                className="w-full h-64 sm:h-72 object-contain bg-white group-hover:scale-[1.01] transition-transform duration-200"
               />
+              <div className="absolute top-2.5 right-2.5 px-2.5 py-1 text-xs font-bold rounded-lg border border-[#1C1C1C] bg-white text-[#1C1C1C] shadow-[1.5px_1.5px_0px_#1C1C1C] flex items-center gap-1.5 group-hover:bg-[#F2A93B] transition">
+                <Maximize2 className="w-3.5 h-3.5 text-[#1C1C1C]" />
+                <span>Full Screen</span>
+              </div>
               {inspectProduct.images.length > 1 && (
-                <span className="absolute bottom-2 right-2 px-2.5 py-1 text-[11px] font-mono bg-black/75 text-white rounded-md font-bold">
+                <span className="absolute bottom-2.5 left-2.5 px-2.5 py-1 text-[11px] font-mono bg-black/75 text-white rounded-md font-bold">
                   {activeInspectImgIdx + 1} of {inspectProduct.images.length}
                 </span>
               )}
@@ -1197,6 +1327,33 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                 Close Preview
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* FULL SCREEN IMAGE LIGHTBOX MODAL */}
+      {fullImageLightbox && (
+        <div
+          onClick={() => setFullImageLightbox(null)}
+          className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200 cursor-zoom-out"
+        >
+          <div
+            className="relative max-w-4xl max-h-[90vh] flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setFullImageLightbox(null)}
+              className="absolute -top-12 right-0 p-2 text-white hover:text-[#F2A93B] cursor-pointer transition flex items-center gap-1 font-bold text-xs"
+              aria-label="Close full view"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <img
+              src={fullImageLightbox}
+              alt="Listing full view"
+              className="max-w-full max-h-[85vh] object-contain rounded-2xl border-3 border-[#1C1C1C] shadow-[8px_8px_0px_#1C1C1C] bg-white"
+            />
           </div>
         </div>
       )}
