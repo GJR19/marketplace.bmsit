@@ -28,6 +28,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { Product, Student, ProductCategory, ListingStatus, WantedRequest } from '../types';
 import { ConfirmModal } from '../components/common/ConfirmModal';
+import { UserAvatar } from '../components/common/UserAvatar';
 import { formatPriceINR } from '../utils/usnParser';
 
 interface AdminDashboardPageProps {
@@ -163,33 +164,101 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   const fetchAdminData = async () => {
     setRefreshing(true);
     try {
-      // 1. Fetch live products from admin RPC
-      const { data: prodData, error: prodErr } = await supabase.rpc('admin_get_all_products');
-      if (!prodErr && prodData && prodData.length > 0) {
-        const mapped: Product[] = prodData.map((row: any) => ({
-          id: row.id,
-          title: row.title,
-          category: row.category as ProductCategory,
-          description: row.description,
-          price: Number(row.price),
-          originalPrice: row.original_price ? Number(row.original_price) : undefined,
-          condition: row.condition,
-          images: Array.isArray(row.images) ? row.images : [],
-          sellerId: row.seller_id,
-          sellerName: row.seller_name || 'BMSIT Student',
-          sellerUSN: row.seller_usn || '1BY24XX000',
-          sellerBranch: row.seller_branch || 'Engineering',
-          sellerAdmissionYear: 2024,
-          sellerCurrentYear: 'Student',
-          sellerAvatar: row.seller_avatar || row.avatar_url || (row.seller && row.seller.avatar_url) || `https://api.dicebear.com/7.x/bottts/svg?seed=${row.seller_usn || row.seller_id}`,
-          status: row.status === 'pending' ? 'pending_approval' : (row.status as ListingStatus),
-          handoverLocation: row.location || 'Campus Main Gate',
-          contactPreference: row.meet_preferences || 'In-app Chat',
-          postedDate: row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
-          updatedDate: row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
-          rejectionReason: row.rejection_reason || undefined,
-        }));
-        setDbProducts(mapped);
+      // 1. Fetch live products from direct products table AND admin RPC to ensure original_price is fully populated
+      let loadedProducts: Product[] = [];
+      try {
+        const { data: tableData, error: tableErr } = await supabase
+          .from('products')
+          .select(`
+            *,
+            seller:profiles!seller_id (
+              full_name,
+              college_email,
+              usn,
+              branch,
+              admission_year,
+              current_year,
+              phone
+            )
+          `)
+          .order('created_at', { ascending: false });
+
+        if (!tableErr && tableData && tableData.length > 0) {
+          loadedProducts = tableData.map((row: any) => ({
+            id: row.id,
+            title: row.title,
+            category: row.category as ProductCategory,
+            description: row.description,
+            price: Number(row.price),
+            originalPrice: row.original_price ? Number(row.original_price) : undefined,
+            condition: row.condition,
+            images: Array.isArray(row.images) ? row.images : [],
+            sellerId: row.seller_id,
+            sellerName: row.seller?.full_name || 'BMSIT Student',
+            sellerUSN: row.seller?.usn || '1BY24XX000',
+            sellerBranch: row.seller?.branch || 'Engineering',
+            sellerAdmissionYear: 2024,
+            sellerCurrentYear: 'Student',
+            sellerAvatar: '',
+            status: row.status === 'pending' ? 'pending_approval' : (row.status as ListingStatus),
+            handoverLocation: row.location || 'Campus Main Gate',
+            contactPreference: row.meet_preferences || 'In-app Chat',
+            postedDate: row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+            updatedDate: row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+            rejectionReason: row.rejection_reason || undefined,
+          }));
+        }
+      } catch (err) {
+        console.warn('Direct products table fetch note:', err);
+      }
+
+      // Merge with admin RPC if available
+      try {
+        const { data: prodData, error: prodErr } = await supabase.rpc('admin_get_all_products');
+        if (!prodErr && prodData && prodData.length > 0) {
+          const prodMap = new Map<string, Product>();
+          loadedProducts.forEach((p) => prodMap.set(p.id, p));
+
+          prodData.forEach((row: any) => {
+            const existing = prodMap.get(row.id);
+            const origPrice =
+              row.original_price !== undefined && row.original_price !== null
+                ? Number(row.original_price)
+                : existing?.originalPrice;
+
+            prodMap.set(row.id, {
+              id: row.id,
+              title: row.title || existing?.title || '',
+              category: (row.category || existing?.category) as ProductCategory,
+              description: row.description || existing?.description || '',
+              price: Number(row.price ?? existing?.price),
+              originalPrice: origPrice,
+              condition: row.condition || existing?.condition || 'Used - Good',
+              images: Array.isArray(row.images) ? row.images : existing?.images || [],
+              sellerId: row.seller_id || existing?.sellerId,
+              sellerName: row.seller_name || existing?.sellerName || 'BMSIT Student',
+              sellerUSN: row.seller_usn || existing?.sellerUSN || '1BY24XX000',
+              sellerBranch: row.seller_branch || existing?.sellerBranch || 'Engineering',
+              sellerAdmissionYear: 2024,
+              sellerCurrentYear: 'Student',
+              sellerAvatar: '',
+              status: row.status === 'pending' ? 'pending_approval' : (row.status as ListingStatus),
+              handoverLocation: row.location || existing?.handoverLocation || 'Campus Main Gate',
+              contactPreference: row.meet_preferences || existing?.contactPreference || 'In-app Chat',
+              postedDate: row.created_at ? row.created_at.split('T')[0] : existing?.postedDate || new Date().toISOString().split('T')[0],
+              updatedDate: row.created_at ? row.created_at.split('T')[0] : existing?.updatedDate || new Date().toISOString().split('T')[0],
+              rejectionReason: row.rejection_reason || existing?.rejectionReason,
+            });
+          });
+
+          loadedProducts = Array.from(prodMap.values());
+        }
+      } catch (rpcErr) {
+        console.warn('RPC fetch note:', rpcErr);
+      }
+
+      if (loadedProducts.length > 0) {
+        setDbProducts(loadedProducts);
       }
 
       // 2. Fetch live users from profiles table AND admin RPC
@@ -307,8 +376,19 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     }
   }, [isAdminAuthenticated]);
 
-  // Combined Live & Fallback Collections - merges DB and AppContext state seamlessly
-  const currentProducts = dbProducts.length > 0 ? dbProducts : products;
+  // Combined Live & Fallback Collections - merges DB and AppContext state seamlessly, preserving originalPrice
+  const currentProducts = useMemo(() => {
+    const map = new Map<string, Product>();
+    products.forEach((p) => map.set(p.id, p));
+    dbProducts.forEach((p) => {
+      const existing = map.get(p.id);
+      map.set(p.id, {
+        ...p,
+        originalPrice: p.originalPrice ?? existing?.originalPrice,
+      });
+    });
+    return Array.from(map.values());
+  }, [dbProducts, products]);
 
   const currentWantedRequests = useMemo(() => {
     const map = new Map<string, WantedRequest>();
@@ -721,9 +801,22 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                           {p.title}
                         </h3>
 
-                        <div className="text-xs font-semibold text-neutral-700">
-                          Price: <span className="text-[#F2A93B] font-bold">{formatPriceINR(p.price)}</span> •{' '}
-                          Category: {p.category}
+                        <div className="text-xs font-semibold text-neutral-700 flex items-center gap-2 flex-wrap">
+                          <span>
+                            Selling Price: <strong className="text-[#F2A93B] font-extrabold">{formatPriceINR(p.price)}</strong>
+                          </span>
+                          <span className="text-neutral-400">•</span>
+                          <span>
+                            Original MRP: {p.originalPrice && p.originalPrice > 0 ? (
+                              <span className="font-mono font-bold text-neutral-900 line-through bg-[#FFE082]/60 px-1.5 py-0.5 rounded border border-[#1C1C1C]/30">
+                                {formatPriceINR(p.originalPrice)}
+                              </span>
+                            ) : (
+                              <span className="text-neutral-500 italic">Not entered</span>
+                            )}
+                          </span>
+                          <span className="text-neutral-400">•</span>
+                          <span>Category: <strong className="text-[#E1467A]">{p.category}</strong></span>
                         </div>
 
                         <div className="text-[11px] text-neutral-500 font-mono">
@@ -990,7 +1083,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               <table className="w-full text-left text-xs">
                 <thead className="bg-[#FFFBEA] border-b-2 border-[#1C1C1C] text-neutral-700 font-bold">
                   <tr>
-                    <th className="p-3.5">Student / Avatar</th>
+                    <th className="p-3.5">Student</th>
                     <th className="p-3.5">VTU USN</th>
                     <th className="p-3.5">Active Postings</th>
                     <th className="p-3.5">Status</th>
@@ -1005,12 +1098,9 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                     return (
                       <tr key={s.id} className="hover:bg-[#FFF9E6]/50">
                         <td className="p-3.5 flex items-center gap-2.5">
-                          <img
-                            src={s.avatar}
-                            alt={s.name}
-                            onClick={() => s.avatar && setFullImageLightbox(s.avatar)}
-                            className="w-9 h-9 rounded-full border-2 border-[#1C1C1C] object-cover cursor-zoom-in hover:scale-110 transition shadow-[1px_1px_0px_#1C1C1C] shrink-0"
-                            title="Click to view student DP in full screen"
+                          <UserAvatar
+                            name={s.name}
+                            className="w-9 h-9 text-xs rounded-xl border-2 border-[#1C1C1C] shadow-[1px_1px_0px_#1C1C1C] shrink-0"
                           />
                           <div>
                             <div className="font-bold text-[#1C1C1C]">{s.name}</div>
@@ -1297,15 +1387,50 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               </div>
             )}
 
-            <div className="space-y-1 text-xs">
-              <div className="font-head font-bold text-base text-[#1C1C1C]">
+            <div className="space-y-2 text-xs">
+              <div className="font-head font-bold text-lg text-[#1C1C1C]">
                 {inspectProduct.title}
               </div>
-              <div className="font-extrabold text-[#F2A93B]">
-                {formatPriceINR(inspectProduct.price)} • {inspectProduct.category}
+
+              {/* Pricing breakdown card */}
+              <div className="p-3 bg-[#FFF9E6] rounded-xl border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] space-y-1.5">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">
+                      Selling Price (Student)
+                    </span>
+                    <span className="text-xl font-extrabold text-[#F2A93B]">
+                      {formatPriceINR(inspectProduct.price)}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">
+                      Original Price / MRP
+                    </span>
+                    <span className="text-base font-bold font-mono text-neutral-800 line-through">
+                      {inspectProduct.originalPrice && inspectProduct.originalPrice > 0
+                        ? formatPriceINR(inspectProduct.originalPrice)
+                        : 'Not specified'}
+                    </span>
+                  </div>
+
+                  {inspectProduct.originalPrice && inspectProduct.originalPrice > inspectProduct.price && (
+                    <div className="px-2.5 py-1 rounded-lg bg-emerald-100 border border-emerald-800 text-emerald-900 font-bold text-xs shadow-xs">
+                      ₹{inspectProduct.originalPrice - inspectProduct.price} off MRP
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-[11px] text-neutral-600 font-semibold pt-1 border-t border-[#1C1C1C]/15 flex items-center gap-2">
+                  <span>Category: <strong className="text-[#E1467A]">{inspectProduct.category}</strong></span>
+                  <span>•</span>
+                  <span>Condition: <strong className="text-[#1C1C1C]">{inspectProduct.condition}</strong></span>
+                </div>
               </div>
+
               {inspectProduct.description && (
-                <p className="text-neutral-700 bg-[#FFFBEA] p-2.5 rounded-lg border border-[#1C1C1C]/15 whitespace-pre-line">
+                <p className="text-neutral-700 bg-[#FFFBEA] p-2.5 rounded-lg border border-[#1C1C1C]/15 whitespace-pre-line text-xs">
                   "{inspectProduct.description}"
                 </p>
               )}

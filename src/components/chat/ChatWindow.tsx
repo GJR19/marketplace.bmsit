@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Product, ChatConversation } from '../../types';
+import { UserAvatar } from '../common/UserAvatar';
 
 interface ChatWindowProps {
   initialConversationId?: string;
@@ -170,10 +171,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   }`}
                 >
                   <div className="flex items-start gap-2.5">
-                    <img
-                      src={other.avatar}
-                      alt={other.name}
-                      className="w-10 h-10 rounded-full border-1.5 border-[#1C1C1C] object-cover shrink-0"
+                    <UserAvatar
+                      name={other.name}
+                      className="w-10 h-10 text-sm rounded-xl border-1.5 border-[#1C1C1C] shrink-0"
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between mb-0.5">
@@ -235,10 +235,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     <ArrowLeft className="w-4 h-4" />
                   </button>
 
-                  <img
-                    src={activeOther.avatar}
-                    alt={activeOther.name}
-                    className="w-10 h-10 rounded-full border-2 border-[#1C1C1C] object-cover shadow-[1.5px_1.5px_0px_#1C1C1C]"
+                  <UserAvatar
+                    name={activeOther.name}
+                    className="w-10 h-10 text-sm rounded-xl border-2 border-[#1C1C1C] shadow-[1.5px_1.5px_0px_#1C1C1C] shrink-0"
                   />
                   <div>
                     <h4 className="font-head font-bold text-base text-[#1C1C1C] leading-tight">

@@ -21,8 +21,6 @@ import {
   Bell,
   Eye,
   X,
-  Camera,
-  Upload,
   LogOut,
   Mail,
 } from 'lucide-react';
@@ -30,6 +28,7 @@ import { useApp } from '../context/AppContext';
 import { Product, ProductCategory, WantedRequest } from '../types';
 import { ConfirmModal } from '../components/common/ConfirmModal';
 import { ProductCard } from '../components/product/ProductCard';
+import { UserAvatar } from '../components/common/UserAvatar';
 import { formatPriceINR } from '../utils/usnParser';
 import { normalizeCampusLocation } from '../data/mockData';
 import { supabase } from '../lib/supabase';
@@ -263,112 +262,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     setEditModalOpen(true);
   };
 
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 10 * 1024 * 1024) {
-      pushToast('Image file size must be less than 10MB', 'warning');
-      return;
-    }
-
-    try {
-      pushToast('Processing and updating profile picture...', 'info');
-
-      // 1. Downscale/compress image using an off-screen HTML5 canvas to max 400x400
-      const img = new Image();
-      const objectUrl = URL.createObjectURL(file);
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = reject;
-        img.src = objectUrl;
-      });
-
-      const maxDim = 400;
-      let width = img.width;
-      let height = img.height;
-      if (width > height) {
-        if (width > maxDim) {
-          height = Math.round((height * maxDim) / width);
-          width = maxDim;
-        }
-      } else {
-        if (height > maxDim) {
-          width = Math.round((width * maxDim) / height);
-          height = maxDim;
-        }
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(img, 0, 0, width, height);
-      }
-      URL.revokeObjectURL(objectUrl);
-
-      // Lightweight compressed JPEG data URL (~30-50KB)
-      const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
-      let finalAvatarUrl = compressedDataUrl;
-
-      // 2. Also attempt upload to Supabase Storage if possible
-      try {
-        const blob = await new Promise<Blob | null>((resolve) =>
-          canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.88)
-        );
-        if (blob) {
-          const filePath = `avatars/${currentUser.id || 'user'}-${Date.now()}.jpg`;
-          const { error: uploadError } = await supabase.storage
-            .from('marketplace-images')
-            .upload(filePath, blob, { upsert: true });
-
-          if (!uploadError) {
-            const { data: publicUrlData } = supabase.storage
-              .from('marketplace-images')
-              .getPublicUrl(filePath);
-            if (publicUrlData?.publicUrl) {
-              finalAvatarUrl = publicUrlData.publicUrl;
-            }
-          }
-        }
-      } catch (storageErr) {
-        console.warn('Storage upload fallback to compressed Data URL:', storageErr);
-      }
-
-      // 3. Update profile state and Supabase profiles table
-      updateProfile({ avatar: finalAvatarUrl });
-      pushToast('Profile photo updated successfully!', 'success');
-    } catch (err) {
-      console.error('Avatar upload failed:', err);
-      pushToast('Failed to process image. Please try another photo.', 'error');
-    }
-  };
-
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
       {/* Top Welcome Banner */}
       <div className="bg-[#FFF9E6] rounded-3xl border-3 border-[#1C1C1C] shadow-[5px_5px_0px_#1C1C1C] p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
-          <div className="relative group shrink-0">
-            <img
-              src={currentUser.avatar}
-              alt={currentUser.name}
-              className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border-2 border-[#1C1C1C] object-cover shadow-[3px_3px_0px_#1C1C1C]"
-            />
-            <label
-              className="absolute -bottom-1.5 -right-1.5 p-1.5 rounded-lg bg-[#F2A93B] border border-[#1C1C1C] cursor-pointer shadow-[1.5px_1.5px_0px_#1C1C1C] hover:bg-[#e49b2f] transition flex items-center justify-center"
-              title="Change Profile Photo"
-            >
-              <Camera className="w-3.5 h-3.5 text-[#1C1C1C]" />
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleAvatarUpload}
-              />
-            </label>
-          </div>
+          <UserAvatar
+            name={currentUser.name}
+            className="w-16 h-16 sm:w-20 sm:h-20 text-2xl sm:text-3xl rounded-2xl border-3 border-[#1C1C1C] shadow-[3px_3px_0px_#1C1C1C] shrink-0"
+          />
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="nb-sticker text-xs bg-[#FFE082]">
@@ -713,41 +615,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                     value={currentUser.usn}
                     className="w-full p-2.5 rounded-xl border-2 border-neutral-300 bg-neutral-100 text-neutral-500 font-mono cursor-not-allowed"
                   />
-                </div>
-              </div>
-
-              {/* Profile Photo Customization */}
-              <div className="pt-4 border-t border-[#1C1C1C]/15 space-y-4">
-                <div>
-                  <h4 className="font-head font-bold text-base text-[#1C1C1C]">
-                    Profile Photo
-                  </h4>
-                  <p className="text-xs text-neutral-500">
-                    Upload your profile picture (JPEG, PNG or WebP under 4MB).
-                  </p>
-                </div>
-
-                <div className="flex flex-col sm:flex-row sm:items-center gap-5">
-                  <div className="relative w-20 h-20 rounded-2xl border-3 border-[#1C1C1C] overflow-hidden shadow-[3px_3px_0px_#1C1C1C] bg-[#FFE082] flex-shrink-0">
-                    <img
-                      src={currentUser.avatar}
-                      alt={currentUser.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-[#1C1C1C] bg-[#F2A93B] text-xs font-bold text-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] cursor-pointer hover:bg-[#e49b2f] transition">
-                      <Upload className="w-4 h-4" />
-                      <span>Upload New Photo</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleAvatarUpload}
-                      />
-                    </label>
-                  </div>
                 </div>
               </div>
 

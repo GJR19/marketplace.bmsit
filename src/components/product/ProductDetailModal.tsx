@@ -20,6 +20,7 @@ import { Product } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { formatPriceINR } from '../../utils/usnParser';
 import { normalizeCampusLocation } from '../../data/mockData';
+import { UserAvatar } from '../common/UserAvatar';
 
 interface ProductDetailModalProps {
   product: Product | null;
@@ -295,10 +296,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <img
-                      src={product.sellerAvatar}
-                      alt={product.sellerName}
-                      className="w-12 h-12 rounded-full border-2 border-[#1C1C1C] object-cover shadow-[1.5px_1.5px_0px_#1C1C1C]"
+                    <UserAvatar
+                      name={product.sellerName}
+                      className="w-12 h-12 text-lg rounded-2xl border-2 border-[#1C1C1C] shadow-[1.5px_1.5px_0px_#1C1C1C] shrink-0"
                     />
                     <div className="min-w-0 flex-1">
                       <div className="font-head font-bold text-base text-[#1C1C1C] leading-snug">

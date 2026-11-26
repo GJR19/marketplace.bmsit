@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Product } from '../../types';
+import { UserAvatar } from '../common/UserAvatar';
 
 interface NavbarProps {
   activeTab: string;
@@ -400,7 +401,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   setUserMenuOpen(!userMenuOpen);
                   setNotifDropdownOpen(false);
                 }}
-                className={`flex items-center gap-1.5 sm:gap-2 p-0 sm:pl-2 sm:pr-3 sm:py-2 rounded-xl border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] transition cursor-pointer shrink-0 overflow-hidden w-9 h-9 sm:w-auto sm:h-auto ${
+                className={`flex items-center gap-1.5 sm:gap-2 p-1 sm:pl-2 sm:pr-3 sm:py-1.5 rounded-xl border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] transition cursor-pointer shrink-0 ${
                   activeTab === 'dashboard'
                     ? 'bg-[#F2A93B] text-[#1C1C1C]'
                     : 'bg-white text-[#1C1C1C] hover:bg-[#FFE082]'
@@ -408,10 +409,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 title="My Account"
                 aria-label="My Account"
               >
-                <img
-                  src={currentUser.avatar}
-                  alt={currentUser.name}
-                  className="w-full h-full sm:w-6 sm:h-6 object-cover shrink-0 sm:rounded-lg sm:border sm:border-[#1C1C1C]"
+                <UserAvatar
+                  name={currentUser.name}
+                  className="w-7 h-7 sm:w-6 sm:h-6 text-xs rounded-lg border border-[#1C1C1C] shadow-none"
                 />
                 <span className="text-xs sm:text-sm font-extrabold text-[#1C1C1C] hidden sm:inline">
                   My Account
@@ -646,10 +646,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                     onClick={() => navigateTo('dashboard')}
                     className="flex items-center gap-2 cursor-pointer group"
                   >
-                    <img
-                      src={currentUser.avatar}
-                      alt={currentUser.name}
-                      className="w-7 h-7 rounded-lg border border-[#1C1C1C] object-cover shrink-0"
+                    <UserAvatar
+                      name={currentUser.name}
+                      className="w-7 h-7 text-xs rounded-lg border border-[#1C1C1C] shadow-none shrink-0"
                     />
                     <div className="text-left leading-tight">
                       <div className="text-xs font-bold text-[#1C1C1C] truncate max-w-[170px] group-hover:underline">
