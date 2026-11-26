@@ -200,8 +200,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   // User Wishlisted Products
   const myWishlistProducts = products.filter((p) => wishlist.includes(p.id));
 
-  // User Wanted Requests
-  const myWanted = wantedRequests.filter((r) => r.studentId === currentUser.id);
+  // User Wanted Requests: strictly approved requests only! Even creator must only view once approved
+  const myWanted = wantedRequests.filter(
+    (r) =>
+      r.studentId === currentUser.id &&
+      (r.status === 'open' || r.status === 'approved' || r.status === 'responses_received')
+  );
 
   // KPIs
   const totalPostingsCount = myPostings.length;
@@ -566,8 +570,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                   ))}
                 </div>
               ) : (
-                <div className="p-8 text-center bg-white rounded-2xl border-2 border-[#1C1C1C] text-xs text-neutral-600">
-                  You haven't posted any Wanted Requests yet.
+                <div className="p-8 text-center bg-white rounded-2xl border-2 border-[#1C1C1C] text-xs text-neutral-600 space-y-1">
+                  <p className="font-bold text-sm text-[#1C1C1C]">No live wanted requests.</p>
+                  <p>Requests submitted for review will appear here and on the campus Wanted Board once approved by moderators.</p>
                 </div>
               )}
             </div>

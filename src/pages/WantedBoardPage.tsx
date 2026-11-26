@@ -50,9 +50,8 @@ export const WantedBoardPage: React.FC<WantedBoardPageProps> = ({ onOpenChat, on
     return wantedRequests
       .filter((r: WantedRequest) => {
         const isApproved = r.status === 'open' || r.status === 'approved' || r.status === 'responses_received';
-        const isOwner = currentUser?.id && r.studentId === currentUser.id;
-        // Strictly hide pending/rejected requests from other users until approved by moderator
-        if (!isApproved && !isOwner) {
+        // Strictly only show approved requests on the board. Even creator must only view once approved!
+        if (!isApproved) {
           return false;
         }
         if (categoryFilter !== 'All' && r.category !== categoryFilter) {
@@ -63,7 +62,7 @@ export const WantedBoardPage: React.FC<WantedBoardPageProps> = ({ onOpenChat, on
       .sort((a: WantedRequest, b: WantedRequest) => {
         return new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime();
       });
-  }, [wantedRequests, categoryFilter, currentUser?.id]);
+  }, [wantedRequests, categoryFilter]);
 
   // Handle Create Request (No budget, no needed-by-date)
   const handleCreateRequest = (e: React.FormEvent) => {
@@ -255,9 +254,7 @@ export const WantedBoardPage: React.FC<WantedBoardPageProps> = ({ onOpenChat, on
                   <div className="pt-4 border-t border-neutral-100 mt-4">
                     {isOwner ? (
                       <div className="text-center py-2 text-xs font-bold text-neutral-700 bg-[#FFFBEA] rounded-xl border border-[#1C1C1C]">
-                        {req.status === 'pending_approval' || (req as any).status === 'pending'
-                          ? '⏳ Awaiting Moderator Approval (Only visible to you)'
-                          : 'Posted by You'}
+                        Posted by You
                       </div>
                     ) : (
                       <button

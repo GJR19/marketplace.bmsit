@@ -206,13 +206,14 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({
         </div>
       </div>
 
-      {/* Mobile Category Pill Filter (Requested Design) */}
-      <div className="lg:hidden p-4 bg-[#FFFBEA] rounded-3xl border-2.5 border-[#1C1C1C] shadow-[4px_4px_0px_#1C1C1C] space-y-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-[#E1467A]" />
-          <span className="font-head font-bold text-sm text-[#1C1C1C]">Category:</span>
-        </div>
-        <div className="flex flex-wrap gap-2 items-center">
+      {/* Mobile Category Pill Filter (Faithful Reference Card) */}
+      <div className="lg:hidden p-3.5 sm:p-5 bg-[#FFFBEA] rounded-[26px] border-3 border-[#1C1C1C] shadow-[5px_5px_0px_#1C1C1C]">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+          <div className="flex items-center gap-1.5 font-head font-extrabold text-xs sm:text-sm text-[#1C1C1C] mr-1">
+            <Sparkles className="w-4 h-4 text-[#E1467A] shrink-0" />
+            <span>Category:</span>
+          </div>
+
           {categories.map((cat) => {
             const isSelected = selectedCategory === cat;
             const label = cat === 'All' ? 'All Categories' : cat;
@@ -221,10 +222,10 @@ export const MarketplacePage: React.FC<MarketplacePageProps> = ({
                 key={cat}
                 type="button"
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-4 py-1.5 rounded-full border-2 border-[#1C1C1C] text-xs font-bold transition cursor-pointer ${
+                className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full border-2.5 border-[#1C1C1C] text-xs sm:text-sm font-extrabold transition cursor-pointer select-none ${
                   isSelected
-                    ? 'bg-[#F2A93B] shadow-[2.5px_2.5px_0px_#1C1C1C] text-[#1C1C1C]'
-                    : 'bg-white shadow-[2px_2px_0px_#1C1C1C] hover:bg-[#FFF9E6] text-[#1C1C1C]'
+                    ? 'bg-[#F2A93B] shadow-[3px_3px_0px_#1C1C1C] text-[#1C1C1C]'
+                    : 'bg-white shadow-[3px_3px_0px_#1C1C1C] hover:bg-[#FFF9E6] text-[#1C1C1C]'
                 }`}
               >
                 {label}

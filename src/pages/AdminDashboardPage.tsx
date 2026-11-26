@@ -25,7 +25,7 @@ import {
   Maximize2,
   X,
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp, safeLocalStorage } from '../context/AppContext';
 import { Product, Student, ProductCategory, ListingStatus, WantedRequest } from '../types';
 import { ConfirmModal } from '../components/common/ConfirmModal';
 import { UserAvatar } from '../components/common/UserAvatar';
@@ -257,6 +257,24 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
         console.warn('RPC fetch note:', rpcErr);
       }
 
+      // Also merge any products stored in safeLocalStorage
+      try {
+        const savedProd = safeLocalStorage.getItem('marketplace_bmsit_products_v4');
+        if (savedProd) {
+          const localProds: Product[] = JSON.parse(savedProd);
+          const prodMap = new Map<string, Product>();
+          localProds.forEach((p) => prodMap.set(p.id, p));
+          loadedProducts.forEach((p) => {
+            const existing = prodMap.get(p.id);
+            prodMap.set(p.id, {
+              ...p,
+              originalPrice: p.originalPrice ?? existing?.originalPrice,
+            });
+          });
+          loadedProducts = Array.from(prodMap.values());
+        }
+      } catch {}
+
       if (loadedProducts.length > 0) {
         setDbProducts(loadedProducts);
       }
@@ -360,6 +378,18 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
         }
       } catch {}
 
+      // Also merge any wanted requests stored in safeLocalStorage
+      try {
+        const savedWanted = safeLocalStorage.getItem('marketplace_bmsit_wanted_v4');
+        if (savedWanted) {
+          const localReqs: WantedRequest[] = JSON.parse(savedWanted);
+          const wantedMap = new Map<string, WantedRequest>();
+          localReqs.forEach((r) => wantedMap.set(r.id, r));
+          loadedWanted.forEach((r) => wantedMap.set(r.id, r));
+          loadedWanted = Array.from(wantedMap.values());
+        }
+      } catch {}
+
       if (loadedWanted.length > 0) {
         setDbWantedRequests(loadedWanted);
       }
@@ -392,8 +422,21 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
   const currentWantedRequests = useMemo(() => {
     const map = new Map<string, WantedRequest>();
+    try {
+      const saved = safeLocalStorage.getItem('marketplace_bmsit_wanted_v4');
+      if (saved) {
+        const parsed: WantedRequest[] = JSON.parse(saved);
+        parsed.forEach((r) => map.set(r.id, r));
+      }
+    } catch {}
     wantedRequests.forEach((r) => map.set(r.id, r));
-    dbWantedRequests.forEach((r) => map.set(r.id, r));
+    dbWantedRequests.forEach((r) => {
+      const existing = map.get(r.id);
+      map.set(r.id, {
+        ...r,
+        status: existing?.status || r.status,
+      });
+    });
     return Array.from(map.values()).sort(
       (a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime()
     );
@@ -488,14 +531,39 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     e.preventDefault();
     if (!productToReject) return;
 
+    const fullReason = adminNotes ? `${rejectionReason} (${adminNotes})` : rejectionReason;
     rejectProduct(productToReject.id, rejectionReason, adminNotes);
     setDbProducts((prev) =>
       prev.map((p) =>
         p.id === productToReject.id
-          ? { ...p, status: 'rejected', rejectionReason: rejectionReason + (adminNotes ? ` (${adminNotes})` : '') }
+          ? { ...p, status: 'rejected', rejectionReason: fullReason }
           : p
       )
     );
+    try {
+      const saved = safeLocalStorage.getItem('marketplace_bmsit_products_v4');
+      if (saved) {
+        const list: Product[] = JSON.parse(saved);
+        const updated = list.map((p) =>
+          p.id === productToReject.id
+            ? { ...p, status: 'rejected' as const, rejectionReason: fullReason }
+            : p
+        );
+        safeLocalStorage.setItem('marketplace_bmsit_products_v4', JSON.stringify(updated));
+      }
+    } catch {}
+    supabase
+      .from('products')
+      .update({
+        status: 'rejected',
+        rejection_reason: fullReason,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', productToReject.id)
+      .then(({ error }) => {
+        if (error) console.warn('Supabase direct product reject error:', error.message);
+      });
+
     setRejectModalOpen(false);
   };
 
@@ -504,6 +572,72 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     setDbProducts((prev) =>
       prev.map((p) => (p.id === id ? { ...p, status: 'approved', rejectionReason: undefined } : p))
     );
+    try {
+      const saved = safeLocalStorage.getItem('marketplace_bmsit_products_v4');
+      if (saved) {
+        const list: Product[] = JSON.parse(saved);
+        const updated = list.map((p) =>
+          p.id === id ? { ...p, status: 'approved' as const, rejectionReason: undefined } : p
+        );
+        safeLocalStorage.setItem('marketplace_bmsit_products_v4', JSON.stringify(updated));
+      }
+    } catch {}
+    supabase
+      .from('products')
+      .update({
+        status: 'approved',
+        rejection_reason: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .then(({ error }) => {
+        if (error) console.warn('Supabase direct product approve error:', error.message);
+      });
+  };
+
+  const handleApproveWanted = (req: WantedRequest) => {
+    approveWantedRequest(req.id);
+    setDbWantedRequests((prev) =>
+      prev.map((r) => (r.id === req.id ? { ...r, status: 'open' } : r))
+    );
+    try {
+      const saved = safeLocalStorage.getItem('marketplace_bmsit_wanted_v4');
+      if (saved) {
+        const list: WantedRequest[] = JSON.parse(saved);
+        const updated = list.map((r) => (r.id === req.id ? { ...r, status: 'open' as const } : r));
+        safeLocalStorage.setItem('marketplace_bmsit_wanted_v4', JSON.stringify(updated));
+      }
+    } catch {}
+    supabase
+      .from('wanted_requests')
+      .update({ status: 'approved' })
+      .eq('id', req.id)
+      .then(({ error }) => {
+        if (error) console.warn('Supabase direct wanted approve error:', error.message);
+      });
+  };
+
+  const handleRejectWanted = (req: WantedRequest, reason?: string) => {
+    const finalReason = reason || 'Does not comply with BMSIT guidelines';
+    rejectWantedRequest(req.id, finalReason);
+    setDbWantedRequests((prev) =>
+      prev.map((r) => (r.id === req.id ? { ...r, status: 'rejected' } : r))
+    );
+    try {
+      const saved = safeLocalStorage.getItem('marketplace_bmsit_wanted_v4');
+      if (saved) {
+        const list: WantedRequest[] = JSON.parse(saved);
+        const updated = list.map((r) => (r.id === req.id ? { ...r, status: 'rejected' as const } : r));
+        safeLocalStorage.setItem('marketplace_bmsit_wanted_v4', JSON.stringify(updated));
+      }
+    } catch {}
+    supabase
+      .from('wanted_requests')
+      .update({ status: 'rejected' })
+      .eq('id', req.id)
+      .then(({ error }) => {
+        if (error) console.warn('Supabase direct wanted reject error:', error.message);
+      });
   };
 
   if (!isAdminAuthenticated) {
@@ -637,10 +771,17 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
       {/* KPI Overview Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="p-3.5 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[2.5px_2.5px_0px_#1C1C1C]">
+        <div
+          onClick={() => {
+            setActiveAdminTab('queue');
+            setQueueFilter('pending_approval');
+          }}
+          className="p-3.5 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[2.5px_2.5px_0px_#1C1C1C] cursor-pointer hover:bg-[#FFF9E6] transition"
+          title="Click to view pending listing approval queue"
+        >
           <span className="text-[10px] uppercase font-bold text-neutral-500 block">Pending Queue</span>
           <div className="font-head font-extrabold text-2xl text-[#F2A93B] mt-1">{pendingCount}</div>
-          <span className="text-[10px] text-amber-800 font-semibold">Needs review</span>
+          <span className="text-[10px] text-amber-800 font-semibold">Needs review →</span>
         </div>
 
         <div className="p-3.5 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[2.5px_2.5px_0px_#1C1C1C]">
@@ -661,10 +802,17 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
           <span className="text-[10px] text-neutral-600">Exchanges done</span>
         </div>
 
-        <div className="p-3.5 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[2.5px_2.5px_0px_#1C1C1C]">
+        <div
+          onClick={() => {
+            setActiveAdminTab('wanted');
+            setWantedFilter('pending_approval');
+          }}
+          className="p-3.5 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[2.5px_2.5px_0px_#1C1C1C] cursor-pointer hover:bg-[#EFF6FF] transition"
+          title="Click to view pending wanted requests"
+        >
           <span className="text-[10px] uppercase font-bold text-neutral-500 block">Wanted Reviews</span>
           <div className="font-head font-extrabold text-2xl text-[#2563EB] mt-1">{pendingWantedCount}</div>
-          <span className="text-[10px] text-neutral-600">Pending approval</span>
+          <span className="text-[10px] text-blue-700 font-semibold">Pending approval →</span>
         </div>
 
         <div className="p-3.5 bg-white rounded-2xl border-2 border-[#1C1C1C] shadow-[2.5px_2.5px_0px_#1C1C1C]">
@@ -1012,12 +1160,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                           <>
                             <button
                               type="button"
-                              onClick={() => {
-                                approveWantedRequest(req.id);
-                                setDbWantedRequests((prev) =>
-                                  prev.map((r) => (r.id === req.id ? { ...r, status: 'open' } : r))
-                                );
-                              }}
+                              onClick={() => handleApproveWanted(req)}
                               className="px-3.5 py-1.5 text-xs font-bold rounded-lg border-2 border-[#1C1C1C] bg-[#F2A93B] hover:bg-[#e49b2f] text-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] transition cursor-pointer flex items-center gap-1.5"
                             >
                               <CheckCircle2 className="w-3.5 h-3.5" />
@@ -1025,12 +1168,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                             </button>
                             <button
                               type="button"
-                              onClick={() => {
-                                rejectWantedRequest(req.id, 'Does not comply with BMSIT guidelines');
-                                setDbWantedRequests((prev) =>
-                                  prev.map((r) => (r.id === req.id ? { ...r, status: 'rejected' } : r))
-                                );
-                              }}
+                              onClick={() => handleRejectWanted(req)}
                               className="px-3 py-1.5 text-xs font-bold rounded-lg border border-[#1C1C1C] bg-white text-rose-600 hover:bg-rose-50 transition cursor-pointer"
                             >
                               Reject

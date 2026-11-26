@@ -168,7 +168,14 @@ export const safeLocalStorage = {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(() => {
+    try {
+      const saved = safeLocalStorage.getItem(STORAGE_KEYS.PRODUCTS);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   const [students, setStudents] = useState<Student[]>(() => {
     try {
@@ -243,6 +250,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     safeLocalStorage.setItem(STORAGE_KEYS.WISHLIST, JSON.stringify(wishlist));
   }, [wishlist]);
+
+  useEffect(() => {
+    if (products.length > 0) {
+      safeLocalStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+    }
+  }, [products]);
 
   useEffect(() => {
     if (wantedRequests.length > 0) {
@@ -412,7 +425,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           rejectionReason: row.rejection_reason || undefined,
         }));
 
-        setProducts(live);
+        setProducts((prev) => {
+          const map = new Map<string, Product>();
+          prev.forEach((p) => map.set(p.id, p));
+          live.forEach((p) => {
+            const local = map.get(p.id);
+            // If local was already approved or rejected in this session, keep status if DB is still pending
+            if (
+              local &&
+              (local.status === 'approved' || local.status === 'rejected') &&
+              p.status === 'pending_approval'
+            ) {
+              map.set(p.id, { ...p, status: local.status });
+            } else {
+              map.set(p.id, p);
+            }
+          });
+          const merged = Array.from(map.values());
+          safeLocalStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(merged));
+          return merged;
+        });
       }
     } catch (err) {
       console.warn('Failed to fetch products from Supabase:', err);
@@ -758,7 +790,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       likesCount: 0,
     };
 
-    setProducts((prev) => [newProduct, ...prev]);
+    setProducts((prev) => {
+      const updated = [newProduct, ...prev.filter((p) => p.id !== productId)];
+      safeLocalStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(updated));
+      return updated;
+    });
 
     // Insert into Supabase (triggers trg_notify_admin_new_product)
     if (isUUID(currentUser?.id) && currentUser.id !== 'guest') {
@@ -990,12 +1026,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const approveProduct = (id: string) => {
-    const target = products.find((p) => p.id === id);
-    if (!target) return;
+    setProducts((prev) => {
+      const updated = prev.map((p) =>
+        p.id === id ? { ...p, status: 'approved' as const, rejectionReason: undefined } : p
+      );
+      safeLocalStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(updated));
+      return updated;
+    });
 
-    setProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, status: 'approved', rejectionReason: undefined } : p))
-    );
+    // Direct table update
+    supabase
+      .from('products')
+      .update({
+        status: 'approved',
+        rejection_reason: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .then(({ error }) => {
+        if (error) console.warn('Supabase direct product approve error:', error.message);
+      });
 
     // Call Supabase RPC (updates DB, writes in-app notification, queues email in email_queue)
     supabase
@@ -1003,6 +1053,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .then(({ error }) => {
         if (error) console.warn('admin_approve_product error:', error.message);
       });
+
+    let target = products.find((p) => p.id === id);
+    if (!target) {
+      try {
+        const saved = safeLocalStorage.getItem(STORAGE_KEYS.PRODUCTS);
+        if (saved) {
+          const list: Product[] = JSON.parse(saved);
+          target = list.find((p) => p.id === id);
+        }
+      } catch {}
+    }
+    if (!target) return;
 
     // Send email alert to student seller via /api/send-email
     if (target.sellerId) {
@@ -1088,23 +1150,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const rejectProduct = (id: string, reason: string, adminNotes?: string) => {
-    const target = products.find((p) => p.id === id);
-    if (!target) return;
-
     const fullReason = adminNotes ? `${reason} (${adminNotes})` : reason;
 
-    setProducts((prev) =>
-      prev.map((p) =>
+    setProducts((prev) => {
+      const updated = prev.map((p) =>
         p.id === id
           ? {
               ...p,
-              status: 'rejected',
+              status: 'rejected' as const,
               rejectionReason: fullReason,
               adminNotes,
             }
           : p
-      )
-    );
+      );
+      safeLocalStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(updated));
+      return updated;
+    });
+
+    // Direct table update
+    supabase
+      .from('products')
+      .update({
+        status: 'rejected',
+        rejection_reason: fullReason,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .then(({ error }) => {
+        if (error) console.warn('Supabase direct product reject error:', error.message);
+      });
 
     // Call Supabase RPC (updates DB, writes in-app notification, queues email in email_queue)
     supabase
@@ -1115,6 +1189,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .then(({ error }) => {
         if (error) console.warn('admin_reject_product error:', error.message);
       });
+
+    let target = products.find((p) => p.id === id);
+    if (!target) {
+      try {
+        const saved = safeLocalStorage.getItem(STORAGE_KEYS.PRODUCTS);
+        if (saved) {
+          const list: Product[] = JSON.parse(saved);
+          target = list.find((p) => p.id === id);
+        }
+      } catch {}
+    }
+    if (!target) return;
 
     // Send email alert to student seller
     if (target.sellerId) {
@@ -1280,14 +1366,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const approveWantedRequest = (id: string) => {
-    const target = wantedRequests.find((r) => r.id === id);
-    if (!target) return;
+    setWantedRequests((prev) => {
+      const updated = prev.map((r) => (r.id === id ? { ...r, status: 'open' as const } : r));
+      safeLocalStorage.setItem(STORAGE_KEYS.WANTED, JSON.stringify(updated));
+      return updated;
+    });
 
-    setWantedRequests((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'open' } : r))
-    );
-
-    // Update status in Supabase
+    // Update status in Supabase table directly
     supabase
       .from('wanted_requests')
       .update({ status: 'approved' })
@@ -1295,6 +1380,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .then(({ error }) => {
         if (error) console.warn('Supabase wanted request approve error:', error.message);
       });
+
+    // Also call RPC if defined
+    supabase.rpc('admin_approve_wanted_request', { p_request_id: id }).then(() => {});
+
+    let target = wantedRequests.find((r) => r.id === id);
+    if (!target) {
+      try {
+        const saved = safeLocalStorage.getItem(STORAGE_KEYS.WANTED);
+        if (saved) {
+          const list: WantedRequest[] = JSON.parse(saved);
+          target = list.find((r) => r.id === id);
+        }
+      } catch {}
+    }
+    if (!target) {
+      triggerConfetti();
+      pushToast('Wanted request approved!', 'success');
+      return;
+    }
 
     // Notify requester
     const notif: NotificationItem = {
@@ -1368,14 +1472,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const rejectWantedRequest = (id: string, reason?: string) => {
-    const target = wantedRequests.find((r) => r.id === id);
-    if (!target) return;
+    setWantedRequests((prev) => {
+      const updated = prev.map((r) => (r.id === id ? { ...r, status: 'rejected' as const } : r));
+      safeLocalStorage.setItem(STORAGE_KEYS.WANTED, JSON.stringify(updated));
+      return updated;
+    });
 
-    setWantedRequests((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'rejected' } : r))
-    );
-
-    // Update status in Supabase
+    // Update status in Supabase table directly
     supabase
       .from('wanted_requests')
       .update({ status: 'rejected' })
@@ -1383,6 +1486,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .then(({ error }) => {
         if (error) console.warn('Supabase wanted request reject error:', error.message);
       });
+
+    let target = wantedRequests.find((r) => r.id === id);
+    if (!target) {
+      try {
+        const saved = safeLocalStorage.getItem(STORAGE_KEYS.WANTED);
+        if (saved) {
+          const list: WantedRequest[] = JSON.parse(saved);
+          target = list.find((r) => r.id === id);
+        }
+      } catch {}
+    }
+    if (!target) {
+      pushToast('Wanted request rejected.', 'info');
+      return;
+    }
 
     // Notify requester
     const notif: NotificationItem = {
